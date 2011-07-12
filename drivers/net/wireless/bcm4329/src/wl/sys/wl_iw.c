@@ -1740,6 +1740,7 @@ wl_control_wl_start(struct net_device *dev)
 #if defined(CONFIG_LGE_BCM432X_PATCH) && defined(CONFIG_BRCM_USE_DEEPSLEEP)
 		/* Use Deep Sleep instead of WL RESET */
 		dhd_deep_sleep(dev, FALSE);
+		wl_iw_send_priv_event(dev, "START");
 #else /* CONFIG_LGE_BCM432X_PATCH && CONFIG_BRCM_USE_DEEPSLEEP */
 #if defined(CONFIG_BRCM_USE_GPIO_RESET) /* Do not use GPIO Reset at On/Off. Use mpc. */
 		dhd_customer_gpio_wlan_ctrl(WLAN_RESET_ON);
@@ -8257,7 +8258,7 @@ static int wl_iw_set_priv(
 			WL_TRACE(("Unknown PRIVATE command %s\n", extra));
 			snprintf(extra, MAX_WX_STRING, "OK");
 			dwrq->length = strlen("OK") + 1;
-			WL_ERROR(("Unknown PRIVATE command, ignored\n"));
+			WL_TRACE(("Unknown PRIVATE command, ignored\n"));
 		}
 		WAKE_UNLOCK(iw->pub, WAKE_LOCK_PRIV);
 		WAKE_LOCK_DESTROY(iw->pub, WAKE_LOCK_PRIV);
