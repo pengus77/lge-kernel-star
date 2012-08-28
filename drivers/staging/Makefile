@@ -43,6 +43,7 @@ obj-$(CONFIG_HYPERV)		+= hv/
 obj-$(CONFIG_VME_BUS)		+= vme/
 obj-$(CONFIG_DX_SEP)            += sep/
 obj-$(CONFIG_IIO)		+= iio/
+<<<<<<< HEAD
 obj-$(CONFIG_CS5535_GPIO)	+= cs5535_gpio/
 obj-$(CONFIG_ZRAM)		+= zram/
 obj-$(CONFIG_XVMALLOC)		+= zram/
@@ -72,3 +73,6 @@ obj-$(CONFIG_TOUCHSCREEN_CLEARPAD_TM1217)	+= cptm1217/
 obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI4)	+= ste_rmi4/
 obj-$(CONFIG_DRM_PSB)		+= gma500/
 obj-$(CONFIG_RAMZSWAP)		+= ramzswap/
+obj-$(CONFIG_SNAPPY_COMPRESS)	+= snappy/
+obj-$(CONFIG_SNAPPY_DECOMPRESS)	+= snappy/
+obj-$(CONFIG_ZRAM)              += zram/
