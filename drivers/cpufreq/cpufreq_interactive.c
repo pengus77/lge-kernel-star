@@ -137,93 +137,6 @@ static struct cpufreq_interactive_dynamic_freq dynamic_freq = {
 };
 #endif /* CONFIG_DYNAMIC_FREQ_MODE */
 
-#define DEBUG 0
-#define BUFSZ 128
-
-#if DEBUG
-#include <linux/proc_fs.h>
-
-struct dbgln {
-	int cpu;
-	unsigned long jiffy;
-	unsigned long run;
-	char buf[BUFSZ];
-};
-
-#define NDBGLNS 256
-
-static struct dbgln dbgbuf[NDBGLNS];
-static int dbgbufs;
-static int dbgbufe;
-static struct proc_dir_entry	*dbg_proc;
-static spinlock_t dbgpr_lock;
-
-static u64 up_request_time;
-static unsigned int up_max_latency;
-
-static void dbgpr(char *fmt, ...)
-{
-	va_list args;
-	int n;
-	unsigned long flags;
-
-	spin_lock_irqsave(&dbgpr_lock, flags);
-	n = dbgbufe;
-        va_start(args, fmt);
-        vsnprintf(dbgbuf[n].buf, BUFSZ, fmt, args);
-        va_end(args);
-	dbgbuf[n].cpu = smp_processor_id();
-	dbgbuf[n].run = nr_running();
-	dbgbuf[n].jiffy = jiffies;
-
-	if (++dbgbufe >= NDBGLNS)
-		dbgbufe = 0;
-
-	if (dbgbufe == dbgbufs)
-		if (++dbgbufs >= NDBGLNS)
-			dbgbufs = 0;
-
-	spin_unlock_irqrestore(&dbgpr_lock, flags);
-}
-
-static void dbgdump(void)
-{
-	int i, j;
-	unsigned long flags;
-	static struct dbgln prbuf[NDBGLNS];
-
-	spin_lock_irqsave(&dbgpr_lock, flags);
-	i = dbgbufs;
-	j = dbgbufe;
-	memcpy(prbuf, dbgbuf, sizeof(dbgbuf));
-	dbgbufs = 0;
-	dbgbufe = 0;
-	spin_unlock_irqrestore(&dbgpr_lock, flags);
-
-	while (i != j)
-	{
-		printk("%lu %d %lu %s",
-		       prbuf[i].jiffy, prbuf[i].cpu, prbuf[i].run,
-		       prbuf[i].buf);
-		if (++i == NDBGLNS)
-			i = 0;
-	}
-}
-
-static int dbg_proc_read(char *buffer, char **start, off_t offset,
-			       int count, int *peof, void *dat)
-{
-	printk("max up_task latency=%uus\n", up_max_latency);
-	dbgdump();
-	*peof = 1;
-	return 0;
-}
-
-
-#else
-#define dbgpr(...) do {} while (0)
-#endif
-
 static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
 		unsigned int event);
 
@@ -459,23 +372,14 @@ static void cpufreq_interactive_timer(unsigned long data)
 	 * until more time passes).
 	 */
 	time_in_idle = pcpu->time_in_idle;
-	time_in_iowait = pcpu->time_in_iowait;
 	idle_exit_time = pcpu->idle_exit_time;
 	now_idle = get_cpu_idle_time_us(data, &pcpu->timer_run_time);
 	now_iowait = get_cpu_iowait_time(data, NULL);
 	smp_wmb();
 
 	/* If we raced with cancelling a timer, skip. */
-	if (!idle_exit_time) {
-		dbgpr("timer %d: no valid idle exit sample\n", (int) data);
+	if (!idle_exit_time)
 		goto exit;
-	}
-
-#if DEBUG
-	if ((int) jiffies - (int) pcpu->cpu_timer.expires >= 10)
-		dbgpr("timer %d: late by %d ticks\n",
-		      (int) data, jiffies - pcpu->cpu_timer.expires);
-#endif
 
 	delta_idle = (unsigned int) cputime64_sub(now_idle, time_in_idle);
 	delta_iowait = (unsigned int) cputime64_sub(now_iowait, time_in_iowait);
@@ -485,11 +389,8 @@ static void cpufreq_interactive_timer(unsigned long data)
 	/*
 	 * If timer ran less than 1ms after short-term sample started, retry.
 	 */
-	if (delta_time < 1000) {
-		dbgpr("timer %d: time delta %u too short exit=%llu now=%llu\n", (int) data,
-		      delta_time, idle_exit_time, pcpu->timer_run_time);
+	if (delta_time < 1000)
 		goto rearm;
-	}
 
 	if (delta_idle > delta_time)
 		cpu_load = 0;
@@ -534,17 +435,15 @@ static void cpufreq_interactive_timer(unsigned long data)
 	if (cpufreq_frequency_table_target(pcpu->policy, pcpu->freq_table,
 					   new_freq, CPUFREQ_RELATION_H,
 					   &index)) {
-		dbgpr("timer %d: cpufreq_frequency_table_target error\n", (int) data);
+    pr_warn_once("timer %d: cpufreq_frequency_table_target error\n",
+           (int) data);
 		goto rearm;
 	}
 
 	new_freq = pcpu->freq_table[index].frequency;
 
 	if (pcpu->target_freq == new_freq)
-	{
-		dbgpr("timer %d: load=%d, already at %d\n", (int) data, cpu_load, new_freq);
 		goto rearm_if_notmax;
-	}
 
 	/*
 	 * Do not scale down unless we have been at this frequency for the
@@ -552,13 +451,9 @@ static void cpufreq_interactive_timer(unsigned long data)
 	 */
 	if (new_freq < pcpu->target_freq) {
 		if (cputime64_sub(pcpu->timer_run_time, pcpu->freq_change_time) <
-		    min_sample_time) {
-			dbgpr("timer %d: load=%d cur=%d tgt=%d not yet\n", (int) data, cpu_load, pcpu->target_freq, new_freq);
+		    min_sample_time)
 			goto rearm;
-		}
 	}
-
-	dbgpr("timer %d: load=%d cur=%d tgt=%d queue\n", (int) data, cpu_load, pcpu->target_freq, new_freq);
 
 	if (new_freq < pcpu->target_freq) {
 		pcpu->target_freq = new_freq;
@@ -568,9 +463,6 @@ static void cpufreq_interactive_timer(unsigned long data)
 		queue_work(down_wq, &freq_scale_down_work);
 	} else {
 		pcpu->target_freq = new_freq;
-#if DEBUG
-		up_request_time = ktime_to_us(ktime_get());
-#endif
 		spin_lock_irqsave(&up_cpumask_lock, flags);
 		cpumask_set_cpu(data, &up_cpumask);
 		spin_unlock_irqrestore(&up_cpumask_lock, flags);
@@ -595,10 +487,8 @@ rearm:
 		if (pcpu->target_freq == pcpu->policy->min) {
 			smp_rmb();
 
-			if (pcpu->idling) {
-				dbgpr("timer %d: cpu idle, don't re-arm\n", (int) data);
+			if (pcpu->idling)
 				goto exit;
-			}
 
 			pcpu->timer_idlecancel = 1;
 		}
@@ -608,7 +498,6 @@ rearm:
 		pcpu->time_in_iowait = get_cpu_iowait_time(
 			data, NULL);
 		mod_timer(&pcpu->cpu_timer, jiffies + 2);
-		dbgpr("timer %d: set timer for %lu exit=%llu\n", (int) data, pcpu->cpu_timer.expires, pcpu->idle_exit_time);
 	}
 
 exit:
@@ -646,9 +535,6 @@ static void cpufreq_interactive_idle_start(void)
 				smp_processor_id(), NULL);
 			pcpu->timer_idlecancel = 0;
 			mod_timer(&pcpu->cpu_timer, jiffies + 2);
-			dbgpr("idle: enter at %d, set timer for %lu exit=%llu\n",
-			      pcpu->target_freq, pcpu->cpu_timer.expires,
-			      pcpu->idle_exit_time);
 		}
 #endif
 	} else {
@@ -659,7 +545,6 @@ static void cpufreq_interactive_idle_start(void)
 		 * CPU didn't go busy; we'll recheck things upon idle exit.
 		 */
 		if (pending && pcpu->timer_idlecancel) {
-			dbgpr("idle: cancel timer for %lu\n", pcpu->cpu_timer.expires);
 			del_timer(&pcpu->cpu_timer);
 			/*
 			 * Ensure last timer run time is after current idle
@@ -703,13 +588,6 @@ static void cpufreq_interactive_idle_end(void)
 						NULL);
 		pcpu->timer_idlecancel = 0;
 		mod_timer(&pcpu->cpu_timer, jiffies + 2);
-		dbgpr("idle: exit, set timer for %lu exit=%llu\n", pcpu->cpu_timer.expires, pcpu->idle_exit_time);
-#if DEBUG
-	} else if (timer_pending(&pcpu->cpu_timer) == 0 &&
-		   pcpu->timer_run_time < pcpu->idle_exit_time) {
-		dbgpr("idle: timer not run yet: exit=%llu tmrrun=%llu\n",
-		      pcpu->idle_exit_time, pcpu->timer_run_time);
-#endif
 	}
 
 }
@@ -720,12 +598,6 @@ static int cpufreq_interactive_up_task(void *data)
 	cpumask_t tmp_mask;
 	unsigned long flags;
 	struct cpufreq_interactive_cpuinfo *pcpu;
-
-#if DEBUG
-	u64 now;
-	u64 then;
-	unsigned int lat;
-#endif
 
 	while (1) {
 		set_current_state(TASK_INTERRUPTIBLE);
@@ -743,29 +615,12 @@ static int cpufreq_interactive_up_task(void *data)
 
 		set_current_state(TASK_RUNNING);
 
-#if DEBUG
-		then = up_request_time;
-		now = ktime_to_us(ktime_get());
-
-		if (now > then) {
-			lat = ktime_to_us(ktime_get()) - then;
-
-			if (lat > up_max_latency)
-				up_max_latency = lat;
-		}
-#endif
-
 		tmp_mask = up_cpumask;
 		cpumask_clear(&up_cpumask);
 		spin_unlock_irqrestore(&up_cpumask_lock, flags);
 
 		for_each_cpu(cpu, &tmp_mask) {
 			pcpu = &per_cpu(cpuinfo, cpu);
-
-			if (nr_running() == 1) {
-				dbgpr("up %d: tgt=%d nothing else running\n", cpu,
-				      pcpu->target_freq);
-			}
 
 			smp_rmb();
 
@@ -780,7 +635,6 @@ static int cpufreq_interactive_up_task(void *data)
 						     &pcpu->freq_change_time);
 			pcpu->freq_change_time_in_iowait =
 				get_cpu_iowait_time(cpu, NULL);
-			dbgpr("up %d: set tgt=%d (actual=%d)\n", cpu, pcpu->target_freq, pcpu->policy->cur);
 		}
 	}
 
@@ -815,7 +669,6 @@ static void cpufreq_interactive_freq_down(struct work_struct *work)
 					     &pcpu->freq_change_time);
 		pcpu->freq_change_time_in_iowait =
 			get_cpu_iowait_time(cpu, NULL);
-		dbgpr("down %d: set tgt=%d (actual=%d)\n", cpu, pcpu->target_freq, pcpu->policy->cur);
 	}
 }
 
@@ -1133,12 +986,6 @@ static int __init cpufreq_interactive_init(void)
 
 	spin_lock_init(&up_cpumask_lock);
 	spin_lock_init(&down_cpumask_lock);
-
-#if DEBUG
-	spin_lock_init(&dbgpr_lock);
-	dbg_proc = create_proc_entry("igov", S_IWUSR | S_IRUGO, NULL);
-	dbg_proc->read_proc = dbg_proc_read;
-#endif
 
 	idle_notifier_register(&cpufreq_interactive_idle_nb);
 
