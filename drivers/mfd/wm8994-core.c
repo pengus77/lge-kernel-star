@@ -48,7 +48,7 @@ static int wm8994_read(struct wm8994 *wm8994, unsigned short reg,
 
 	BUG_ON(bytes % 2);
 	BUG_ON(bytes <= 0);
-
+	
 	ret = wm8994->read_dev(wm8994, reg, bytes, dest);
 	if (ret < 0)
 		return ret;
