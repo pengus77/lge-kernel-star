@@ -1813,7 +1813,7 @@ wl_iw_control_wl_off(
 /* LGE_CHANGE_S, [yoohoo@lge.com], 2009-11-19, Use deepsleep instead of dhd_dev_reset when driver start or stop */
 #if defined(CONFIG_BRCM_USE_DEEPSLEEP)
 		/* Use Deep Sleep instead of WL Reset*/
-		dhd_deep_sleep(wl_ctl->dev, TRUE);
+		dhd_deep_sleep(dev, TRUE);
 #elif defined(CONFIG_BRCM_USE_GPIO_RESET)
 		dhd_dev_reset(dev, 1);
 #endif /* CONFIG_BRCM_USE_DEEPSLEEP, CONFIG_BRCM_USE_GPIO_RESET */
