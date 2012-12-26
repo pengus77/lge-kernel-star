@@ -1940,7 +1940,7 @@ wl_cfg80211_set_power_mgmt(struct wiphy *wiphy, struct net_device *dev,
 	WL_DBG(("In\n"));
 #endif
 	CHECK_SYS_UP();
-	pm = enabled ? PM_FAST : PM_OFF;
+	pm = enabled ? PM_MAX : PM_FAST;
 	pm = htod32(pm);
 	WL_DBG(("power save %s\n", (pm ? "enabled" : "disabled")));
 	if (unlikely((err = wl_dev_ioctl(dev, WLC_SET_PM, &pm, sizeof(pm))))) {
