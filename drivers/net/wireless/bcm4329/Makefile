@@ -72,7 +72,7 @@ EXTRA_CFLAGS = \
 	-DGET_CUSTOM_MAC_ENABLE \
 	-DCONFIG_FIRST_SCAN \
 	-DCSCAN \
-	#-DEXTREME_PM \
+	-DEXTREME_PM \
 
 #	\
 	-fshort-wchar \
