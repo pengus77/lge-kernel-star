@@ -870,13 +870,15 @@ wl_iw_set_power_mode(
 {
 	int error = 0;
 	char *p = extra;
-	static int  pm = PM_MAX;
+	char powermode_val = 0;
+
 #ifdef EXTREME_PM
+	static int  pm = PM_MAX;
 	int pm_local = PM_FAST;
 #else
+	static int  pm = PM_FAST;
 	int pm_local = PM_OFF;
 #endif
-	char powermode_val = 0;
 
 	WL_TRACE_COEX(("%s: DHCP session cmd:%s\n", __FUNCTION__, extra));
 
@@ -887,7 +889,8 @@ wl_iw_set_power_mode(
 		dev_wlc_ioctl(dev, WLC_GET_PM, &pm, sizeof(pm));
 		dev_wlc_ioctl(dev, WLC_SET_PM, &pm_local, sizeof(pm_local));
 
-		
+		printk("%s: Jumping from pm state: %d to pm state: %d\n", dev->name, pm, pm_local);
+
 		net_os_set_packet_filter(dev, 0);
 
 		g_bt->ts_dhcp_start = JF2MS;
@@ -1054,10 +1057,11 @@ wl_iw_set_btcoex_dhcp(
 
 
 #ifndef CUSTOMER_HW2
-	static int  pm = PM_MAX;
 #ifdef EXTREME_PM
+	static int  pm = PM_MAX;
 	int pm_local = PM_FAST;
-#else	
+#else
+	static int  pm = PM_FAST;
 	int pm_local = PM_OFF;
 #endif // EXTREME_PM
 #endif // CUSTOMER_HW2
@@ -5445,13 +5449,13 @@ wl_iw_set_power(
 {
 	int error, pm;
 
-	WL_TRACE(("%s: SIOCSIWPOWER\n", dev->name));
-
 #ifdef EXTREME_PM
 	pm = vwrq->disabled ? PM_FAST : PM_MAX;
 #else	
 	pm = vwrq->disabled ? PM_OFF : PM_MAX;
 #endif // EXTREME_PM
+
+	printk("%s: SIOCSIWPOWER, State: %d\n", dev->name, pm);
 
 	pm = htod32(pm);
 	if ((error = dev_wlc_ioctl(dev, WLC_SET_PM, &pm, sizeof(pm))))
