@@ -568,15 +568,13 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 {                                                                                           
 	int power_mode = PM_MAX;
 	/* wl_pkt_filter_enable_t	enable_parm; */
-#if defined(CONFIG_BRCM_LGE_WL_ARPOFFLOAD)
 	char iovbuf[32];
 	int bcn_li_dtim = 0;
-#endif
 
 	printk("%s: enter, value = %d in_suspend=%d\n", \
 			__FUNCTION__, value, dhd->in_suspend);
 
-	if (dhd) {
+	if (dhd && dhd->up) {
 		if (value && dhd->in_suspend) {
 
 				/* Kernel suspended */
@@ -593,6 +591,7 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 					ap_suspend_status = 1;
 #endif
 
+#if defined(EXTREME_PM)
 				/* if dtim skip setup as default force it to wake each thrid dtim
 				 *  for better power saving.
 				 *  Note that side effect is chance to miss BC/MC packet
@@ -600,11 +599,13 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 				bcn_li_dtim = dhd_get_dtim_skip(dhd);
 				bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim,
 					4, iovbuf, sizeof(iovbuf));
+				printk("%s: setting dtim skip to %d\n", __FUNCTION__, bcn_li_dtim);
 				dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
+#endif
 
 #if defined(CONFIG_BRCM_LGE_WL_ARPOFFLOAD)
 				/*Setting dtim.	20110120 */
-				if(wl_dtim_val > 0){
+				if(wl_dtim_val > 0) {
 					bcn_li_dtim = wl_dtim_val;
 					bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim,
 						4, iovbuf, sizeof(iovbuf));
@@ -630,13 +631,11 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 #endif
 
 				/* restore pre-suspend setting for dtim_skip */
-#if defined(CONFIG_BRCM_LGE_WL_ARPOFFLOAD)	/*Setting dtim.	20110120*/
 				bcn_li_dtim = 0;
 				bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim,
 					4, iovbuf, sizeof(iovbuf));
 
 				dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-#endif
 			}
 	}
 

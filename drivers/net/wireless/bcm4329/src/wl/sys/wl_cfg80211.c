@@ -1940,7 +1940,13 @@ wl_cfg80211_set_power_mgmt(struct wiphy *wiphy, struct net_device *dev,
 	WL_DBG(("In\n"));
 #endif
 	CHECK_SYS_UP();
+
+#ifdef EXTREME_PM
 	pm = enabled ? PM_MAX : PM_FAST;
+#else	
+	pm = enabled ? PM_MAX : PM_OFF;
+#endif // EXTREME_PM
+
 	pm = htod32(pm);
 	WL_DBG(("power save %s\n", (pm ? "enabled" : "disabled")));
 	if (unlikely((err = wl_dev_ioctl(dev, WLC_SET_PM, &pm, sizeof(pm))))) {
@@ -4016,7 +4022,7 @@ wl_config_dongle(struct wl_priv *wl, bool need_lock)
 		goto default_conf_out;
 	if (unlikely((err = wl_dongle_country(ndev, 0))))
 		goto default_conf_out;
-	if (unlikely((err = wl_dongle_power(ndev, PM_FAST))))
+	if (unlikely((err = wl_dongle_power(ndev, PM_OFF))))
 		goto default_conf_out;
 	if (unlikely((err = wl_dongle_glom(ndev, 0, DHD_SDALIGN))))
 		goto default_conf_out;
