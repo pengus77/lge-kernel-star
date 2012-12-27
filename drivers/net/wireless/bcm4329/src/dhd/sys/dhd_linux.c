@@ -569,7 +569,7 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 	int power_mode = PM_MAX;
 	/* wl_pkt_filter_enable_t	enable_parm; */
 	char iovbuf[32];
-	int bcn_li_dtim = 0;
+	int bcn_li_dtim = 3;
 
 	printk("%s: enter, value = %d in_suspend=%d\n", \
 			__FUNCTION__, value, dhd->in_suspend);
@@ -591,30 +591,20 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 					ap_suspend_status = 1;
 #endif
 
-#if defined(EXTREME_PM)
 				/* if dtim skip setup as default force it to wake each thrid dtim
 				 *  for better power saving.
 				 *  Note that side effect is chance to miss BC/MC packet
+				 *
+				 * pengus77: nexus devices use this, so i'll put it back ;)
 				*/
 				bcn_li_dtim = dhd_get_dtim_skip(dhd);
 				bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim,
 					4, iovbuf, sizeof(iovbuf));
 				printk("%s: setting dtim skip to %d\n", __FUNCTION__, bcn_li_dtim);
 				dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-#endif
 
-#if defined(CONFIG_BRCM_LGE_WL_ARPOFFLOAD)
-				/*Setting dtim.	20110120 */
-				if(wl_dtim_val > 0) {
-					bcn_li_dtim = wl_dtim_val;
-					bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim,
-						4, iovbuf, sizeof(iovbuf));
-					dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-				}
-
-				printk("%s:%d bcn_li_dtim = %d\n",__func__,__LINE__,bcn_li_dtim);
-#endif
 			} else {
+
 				/* Kernel resumed  */
 				printk("%s: Remove extra suspend setting \n", __FUNCTION__);
 
@@ -632,7 +622,7 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 
 				/* restore pre-suspend setting for dtim_skip */
 				bcn_li_dtim = 0;
-				bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim,
+				bcm_mkiovar("bcn_li_dtim", (char *)&dhd->dtim_skip,
 					4, iovbuf, sizeof(iovbuf));
 
 				dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
