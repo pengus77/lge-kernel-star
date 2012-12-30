@@ -418,7 +418,9 @@ static void __init tegra_star_init(void)
 	star_touch_init();
 	star_misc_init();
 	star_kbc_init();
-	star_bt_rfkill(); 
+#if defined(CONFIG_BCM4329_RFKILL)
+	star_bt_rfkill();
+#endif
 	star_gps_init();
 	star_usb_init();
 #if defined(CONFIG_STAR_TOUCH_LED)
