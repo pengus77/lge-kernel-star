@@ -313,9 +313,10 @@ static void bluesleep_tx_timer_expire(unsigned long data)
 	/* were we silent during the last timeout? */
 	if (!test_bit(BT_TXDATA, &flags)) {
 		BT_DBG("Tx has been idle");
+		/* pengus77: don't remove the wake lock */
 		if (bsi->has_ext_wake == 1)
-			gpio_set_value(bsi->ext_wake, 0);
-		clear_bit(BT_EXT_WAKE, &flags);
+			gpio_set_value(bsi->ext_wake, 1);
+		//clear_bit(BT_EXT_WAKE, &flags);
 		bluesleep_tx_idle();
 	} else {
 		BT_DBG("Tx data during last period");
