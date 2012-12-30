@@ -577,55 +577,66 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 	if (dhd && dhd->up) {
 		if (value && dhd->in_suspend) {
 
-				/* Kernel suspended */
-				printk("%s: force extra Suspend setting \n", __FUNCTION__);
-                                                                          
-				dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM,
+#if defined(CONFIG_LGE_BCM432X_PATCH)	//20110121
+				if(ap_priv_running == TRUE)
+				{
+					ap_suspend_status = 1;
+				}
+				else
+				{
+					/* Kernel suspended */
+					printk("%s: force extra Suspend setting \n", __FUNCTION__);
+					
+					dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM,
 					(char *)&power_mode, sizeof(power_mode));
+
+				  	/* if dtim skip setup as default force it to wake each thrid dtim
+				 	*  for better power saving.
+				 	*  Note that side effect is chance to miss BC/MC packet
+					*
+				 	* pengus77: nexus devices use this, so i'll put it back ;)
+					*/
+					bcn_li_dtim = dhd_get_dtim_skip(dhd);
+					bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim,
+						4, iovbuf, sizeof(iovbuf));
+					printk("%s: setting dtim skip to %d\n", __FUNCTION__, bcn_li_dtim);
+					dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
+				}
 
 				/* Enable packet filter, only allow unicast packet to send up */
 				dhd_set_packet_filter(1, dhd);
-
-#if defined(CONFIG_LGE_BCM432X_PATCH)	//20110121
-				if(ap_priv_running == TRUE)
-					ap_suspend_status = 1;
 #endif
-
-				/* if dtim skip setup as default force it to wake each thrid dtim
-				 *  for better power saving.
-				 *  Note that side effect is chance to miss BC/MC packet
-				 *
-				 * pengus77: nexus devices use this, so i'll put it back ;)
-				*/
-				bcn_li_dtim = dhd_get_dtim_skip(dhd);
-				bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim,
-					4, iovbuf, sizeof(iovbuf));
-				printk("%s: setting dtim skip to %d\n", __FUNCTION__, bcn_li_dtim);
-				dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-
 			} else {
 
 				/* Kernel resumed  */
 				printk("%s: Remove extra suspend setting \n", __FUNCTION__);
 
-				power_mode = PM_FAST;
-				dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM, (char *)&power_mode,
-					sizeof(power_mode));
-
-				/* disable pkt filter */
-				dhd_set_packet_filter(0, dhd);
-
 #if defined(CONFIG_LGE_BCM432X_PATCH)	//20110121
 				if(ap_priv_running == TRUE)
+				{
 					ap_suspend_status = 0;
-#endif
+				}
+				else
+				{
+#ifdef EXTREME_PM
+					power_mode = PM_FAST;
+#else
+					power_mode = PM_OFF;
+#endif // EXTREME_PM
+					dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM, (char *)&power_mode,
+					sizeof(power_mode));
 
-				/* restore pre-suspend setting for dtim_skip */
-				bcn_li_dtim = 0;
-				bcm_mkiovar("bcn_li_dtim", (char *)&dhd->dtim_skip,
-					4, iovbuf, sizeof(iovbuf));
+					/* restore pre-suspend setting for dtim_skip */
+					bcn_li_dtim = 0;
+					bcm_mkiovar("bcn_li_dtim", (char *)&dhd->dtim_skip,
+						4, iovbuf, sizeof(iovbuf));
 
-				dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
+					dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));				
+				
+#endif //CONFIG_LGE_BCM432X_PATCH
+					/* disable pkt filter */
+					dhd_set_packet_filter(0, dhd);
+				}
 			}
 	}
 
