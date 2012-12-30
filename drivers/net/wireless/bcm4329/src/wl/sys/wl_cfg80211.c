@@ -4022,7 +4022,11 @@ wl_config_dongle(struct wl_priv *wl, bool need_lock)
 		goto default_conf_out;
 	if (unlikely((err = wl_dongle_country(ndev, 0))))
 		goto default_conf_out;
+#ifdef EXTREME_PM
+	if (unlikely((err = wl_dongle_power(ndev, PM_FAST))))
+#else
 	if (unlikely((err = wl_dongle_power(ndev, PM_OFF))))
+#endif
 		goto default_conf_out;
 	if (unlikely((err = wl_dongle_glom(ndev, 0, DHD_SDALIGN))))
 		goto default_conf_out;
