@@ -576,8 +576,6 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 
 	if (dhd && dhd->up) {
 		if (value && dhd->in_suspend) {
-
-#if defined(CONFIG_LGE_BCM432X_PATCH)	//20110121
 				if(ap_priv_running == TRUE)
 				{
 					ap_suspend_status = 1;
@@ -589,7 +587,7 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 					
 					dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM,
 					(char *)&power_mode, sizeof(power_mode));
-
+#ifdef ENABLE_DTIM_SKIP
 				  	/* if dtim skip setup as default force it to wake each thrid dtim
 				 	*  for better power saving.
 				 	*  Note that side effect is chance to miss BC/MC packet
@@ -601,17 +599,15 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 						4, iovbuf, sizeof(iovbuf));
 					printk("%s: setting dtim skip to %d\n", __FUNCTION__, bcn_li_dtim);
 					dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
+#endif //ENABLE_DTIM_SKIP
+					/* Enable packet filter, only allow unicast packet to send up */
+					dhd_set_packet_filter(1, dhd);
 				}
-
-				/* Enable packet filter, only allow unicast packet to send up */
-				dhd_set_packet_filter(1, dhd);
-#endif
 			} else {
 
 				/* Kernel resumed  */
 				printk("%s: Remove extra suspend setting \n", __FUNCTION__);
 
-#if defined(CONFIG_LGE_BCM432X_PATCH)	//20110121
 				if(ap_priv_running == TRUE)
 				{
 					ap_suspend_status = 0;
@@ -622,18 +618,16 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 					power_mode = PM_FAST;
 #else
 					power_mode = PM_OFF;
-#endif // EXTREME_PM
+#endif //EXTREME_PM
 					dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM, (char *)&power_mode,
 					sizeof(power_mode));
-
+#ifdef ENABLE_DTIM_SKIP
 					/* restore pre-suspend setting for dtim_skip */
 					bcn_li_dtim = 0;
 					bcm_mkiovar("bcn_li_dtim", (char *)&dhd->dtim_skip,
 						4, iovbuf, sizeof(iovbuf));
-
-					dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));				
-				
-#endif //CONFIG_LGE_BCM432X_PATCH
+					dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
+#endif //ENABLE_DTIM_SKIP
 					/* disable pkt filter */
 					dhd_set_packet_filter(0, dhd);
 				}

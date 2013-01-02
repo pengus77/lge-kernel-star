@@ -73,6 +73,7 @@ EXTRA_CFLAGS = \
 	-DCONFIG_FIRST_SCAN \
 	-DCSCAN \
 	-DEXTREME_PM \
+	#-DENABLE_DTIM_SKIP \
 
 #	\
 	-fshort-wchar \
