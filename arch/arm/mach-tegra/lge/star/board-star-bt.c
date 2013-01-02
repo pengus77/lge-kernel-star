@@ -52,35 +52,6 @@
 #define GPIO_BT_WAKE		TEGRA_GPIO_PX4
 #define GPIO_BT_HOSTWAKE	TEGRA_GPIO_PC7
 
-static bool uart_req;
-
-
-static int plat_bt_uart_enable(void)
-{
-	int err = 0;
-    printk(KERN_DEBUG "%s", __func__);
-#if 0 //LMH_TEMP	
-	if (!uart_req) {
-		//add enable code if needed
-		uart_req = true;
-	}
-#endif	
-	return err;
-}
-
-static int plat_bt_uart_disable(void)
-{
-	int err = 0;
-    printk(KERN_DEBUG "%s", __func__);
-#if 0 //LMH_TEMP		
-	if (uart_req) {
-		//add disable code if needed
-		uart_req = false;
-	}
-#endif	
-	return err;
-}
-
 static struct lbee9qmb_platform_data lbee9qmb_platform = {
 	.gpio_reset = GPIO_BT_RESET,
 #ifdef CONFIG_BRCM_BT_WAKE
@@ -91,8 +62,6 @@ static struct lbee9qmb_platform_data lbee9qmb_platform = {
 #endif
 	.active_low = 0, /* 0: active high, 1: active low */
 	.delay = 100,
-	.chip_enable = plat_bt_uart_enable,
-	.chip_disable = plat_bt_uart_disable,
 };
 static struct platform_device lbee9qmb_device = {
     .name = "lbee9qmb-rfkill",
