@@ -569,69 +569,66 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 	int power_mode = PM_MAX;
 	/* wl_pkt_filter_enable_t	enable_parm; */
 	char iovbuf[32];
-	int bcn_li_dtim = 3;
+	int bcn_li_dtim = 0;
 
 	printk("%s: enter, value = %d in_suspend=%d\n", \
 			__FUNCTION__, value, dhd->in_suspend);
 
 	if (dhd && dhd->up) {
 		if (value && dhd->in_suspend) {
-				if(ap_priv_running == TRUE)
-				{
-					ap_suspend_status = 1;
-				}
-				else
-				{
-					/* Kernel suspended */
-					printk("%s: force extra Suspend setting \n", __FUNCTION__);
+			if(ap_priv_running == TRUE)
+			{
+				ap_suspend_status = 1;
+			}
+			else
+			{
+				/* Kernel suspended */
+				printk("%s: force extra Suspend setting \n", __FUNCTION__);
 					
-					dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM,
+				dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM,
 					(char *)&power_mode, sizeof(power_mode));
+
+				/* Enable packet filter, only allow unicast packet to send up */
+				dhd_set_packet_filter(1, dhd);
+
 #ifdef ENABLE_DTIM_SKIP
-				  	/* if dtim skip setup as default force it to wake each thrid dtim
-				 	*  for better power saving.
-				 	*  Note that side effect is chance to miss BC/MC packet
-					*
-				 	* pengus77: nexus devices use this, so i'll put it back ;)
-					*/
-					bcn_li_dtim = dhd_get_dtim_skip(dhd);
+				bcn_li_dtim = dhd_get_dtim_skip(dhd);
+
+				if (bcn_li_dtm > 0)
+				{
 					bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim,
 						4, iovbuf, sizeof(iovbuf));
 					printk("%s: setting dtim skip to %d\n", __FUNCTION__, bcn_li_dtim);
 					dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-#endif //ENABLE_DTIM_SKIP
-					/* Enable packet filter, only allow unicast packet to send up */
-					dhd_set_packet_filter(1, dhd);
 				}
-			} else {
-
-				/* Kernel resumed  */
-				printk("%s: Remove extra suspend setting \n", __FUNCTION__);
-
-				if(ap_priv_running == TRUE)
-				{
-					ap_suspend_status = 0;
-				}
-				else
-				{
-#ifdef EXTREME_PM
-					power_mode = PM_FAST;
-#else
-					power_mode = PM_OFF;
-#endif //EXTREME_PM
-					dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM, (char *)&power_mode,
-					sizeof(power_mode));
-#ifdef ENABLE_DTIM_SKIP
-					/* restore pre-suspend setting for dtim_skip */
-					bcn_li_dtim = 0;
-					bcm_mkiovar("bcn_li_dtim", (char *)&dhd->dtim_skip,
-						4, iovbuf, sizeof(iovbuf));
-					dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-#endif //ENABLE_DTIM_SKIP
-					/* disable pkt filter */
-					dhd_set_packet_filter(0, dhd);
-				}
+#endif
 			}
+		} else {
+
+			/* Kernel resumed  */
+			printk("%s: Remove extra suspend setting \n", __FUNCTION__);
+
+			if(ap_priv_running == TRUE)
+			{
+				ap_suspend_status = 0;
+			}
+			else
+			{
+				power_mode = PM_FAST;
+				dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM, (char *)&power_mode,
+					sizeof(power_mode));
+
+				/* disable pkt filter */
+				dhd_set_packet_filter(0, dhd);
+
+#ifdef ENABLE_DTIM_SKIP
+				bcm_mkiovar("bcn_li_dtim", (char *)&dhd->dtim_skip, 
+					4, iovbuf, sizeof(iovbuf));
+				dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
+				printk("%s: re-setting dtim skip to %d\n", __FUNCTION__, dhd->dtim_skip);
+#endif
+			}
+		}
 	}
 
 	return 0;
