@@ -92,8 +92,8 @@ DECLARE_DELAYED_WORK(sleep_workqueue, bluesleep_sleep_work);
 #define bluesleep_rx_idle()     schedule_delayed_work(&sleep_workqueue, 0)
 #define bluesleep_tx_idle()     schedule_delayed_work(&sleep_workqueue, 0)
 
-/* 10 second timeout */
-#define TX_TIMER_INTERVAL  10
+/* 30 seconds timeout */
+#define TX_TIMER_INTERVAL  30
 
 /* state variable names and bit positions */
 #define BT_PROTO	 0x01
@@ -201,10 +201,6 @@ static void bluesleep_sleep_work(struct work_struct *work)
 		if (tegra_uart_is_tx_empty(bsi->uport)) {
 			printk("%s: going to sleep\n", __FUNCTION__);
 			set_bit(BT_ASLEEP, &flags);
-			/*Deactivating UART */
-			/* UART clk is not turned off immediately. Release
-			 * wakelock after 500 ms.
-			 */
 			wake_lock_timeout(&bsi->wake_lock, HZ / 2);
 		} else {
 			mod_timer(&tx_timer, jiffies + TX_TIMER_INTERVAL * HZ);
@@ -230,7 +226,7 @@ static void bluesleep_sleep_work(struct work_struct *work)
  */
 static void bluesleep_hostwake_task(unsigned long data)
 {
-	BT_DBG("hostwake line change");
+	printk("%s: hostwake line change\n", __FUNCTION__);
 
 	spin_lock(&rw_lock);
 	if ((gpio_get_value(bsi->host_wake) == bsi->irq_polarity))
@@ -238,7 +234,6 @@ static void bluesleep_hostwake_task(unsigned long data)
 	else
 		bluesleep_rx_idle();
 	spin_unlock(&rw_lock);
-
 }
 
 /**
@@ -310,13 +305,13 @@ static void bluesleep_tx_timer_expire(unsigned long data)
 {
 	unsigned long irq_flags;
 
-	printk("%s: Tx timer expired", __FUNCTION__);
+	printk("%s: Tx timer expired\n", __FUNCTION__);
 
 	spin_lock_irqsave(&rw_lock, irq_flags);
 
 	/* were we silent during the last timeout? */
 	if (!test_bit(BT_TXDATA, &flags)) {
-		printk("%s: Tx has been idle", __FUNCTION__);
+		printk("%s: Tx has been idle\n", __FUNCTION__);
 		if (bsi->has_ext_wake == 1)
 		{
 			gpio_set_value(bsi->ext_wake, 0);
@@ -708,7 +703,6 @@ static int bluesleep_remove(struct platform_device *pdev)
 	return 0;
 }
 
-
 static int bluesleep_resume(struct platform_device *pdev)
 {
 	if (test_bit(BT_SUSPEND, &flags)) {
@@ -716,8 +710,7 @@ static int bluesleep_resume(struct platform_device *pdev)
 		if ((bsi->uport != NULL) &&
 				(gpio_get_value(bsi->host_wake) == bsi->irq_polarity)) {
 			printk("%s: bluesleep: resuming from BT event\n", __FUNCTION__);
-			tegra_uart_request_clock_on(bsi->uport);
-			tegra_uart_set_mctrl(bsi->uport, TIOCM_RTS);
+			hsuart_power(1);
 		}
 		clear_bit(BT_SUSPEND, &flags);
 	}
@@ -726,8 +719,10 @@ static int bluesleep_resume(struct platform_device *pdev)
 
 static int bluesleep_suspend(struct platform_device *pdev, pm_message_t state)
 {
-	printk("%s: bluesleep: suspending\n", __FUNCTION__);
-	set_bit(BT_SUSPEND, &flags);
+	if (!test_bit(BT_SUSPEND, &flags)) {
+		printk("%s: bluesleep: suspending\n", __FUNCTION__);
+		set_bit(BT_SUSPEND, &flags);
+	}
 	return 0;
 }
 
