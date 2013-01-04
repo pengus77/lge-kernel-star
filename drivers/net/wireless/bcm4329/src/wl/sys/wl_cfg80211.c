@@ -1941,11 +1941,7 @@ wl_cfg80211_set_power_mgmt(struct wiphy *wiphy, struct net_device *dev,
 #endif
 	CHECK_SYS_UP();
 
-#ifdef EXTREME_PM
-	pm = enabled ? PM_MAX : PM_FAST;
-#else	
-	pm = enabled ? PM_MAX : PM_OFF;
-#endif // EXTREME_PM
+	int pmode = enabled ? PM_MAX : PM_OFF;
 
 	pm = htod32(pm);
 	WL_DBG(("power save %s\n", (pm ? "enabled" : "disabled")));
@@ -4005,12 +4001,13 @@ wl_config_dongle(struct wl_priv *wl, bool need_lock)
 	struct wireless_dev *wdev;
 	int32 err = 0;
 
+	printk("%s: setting pmode to: %d\n", __FUNCTION__, pmode);
+
 #ifdef WL_CFG80211_BACKTRACE
 	WL_DBG(("In\n"));
 #endif
 	if (wl->dongle_up)
 		return err;
-
 
 	ndev = wl_to_ndev(wl);
 	wdev = ndev->ieee80211_ptr;
@@ -4022,11 +4019,7 @@ wl_config_dongle(struct wl_priv *wl, bool need_lock)
 		goto default_conf_out;
 	if (unlikely((err = wl_dongle_country(ndev, 0))))
 		goto default_conf_out;
-#ifdef EXTREME_PM
-	if (unlikely((err = wl_dongle_power(ndev, PM_FAST))))
-#else
 	if (unlikely((err = wl_dongle_power(ndev, PM_OFF))))
-#endif
 		goto default_conf_out;
 	if (unlikely((err = wl_dongle_glom(ndev, 0, DHD_SDALIGN))))
 		goto default_conf_out;
