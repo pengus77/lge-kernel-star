@@ -123,7 +123,7 @@ config CPU_FREQ_DEFAULT_GOV_INTERACTIVE
 config CPU_FREQ_DEFAULT_GOV_HOTPLUG
 	bool "hotplug"
 	select CPU_FREQ_GOV_HOTPLUG
-	select CPU_FREQ_GOV_PERFORMANCE
+	select CPU_FREQ_GOV_INTERACTIVE
 	help
 	  Use the CPUFreq governor 'hotplug' as default. This allows you
 	  to get a full dynamic frequency capable system with CPU
@@ -132,6 +132,16 @@ config CPU_FREQ_DEFAULT_GOV_HOTPLUG
 	  support the hotplug governor. If unsure have a look at
 	  the help section of the driver. Fallback governor will be the
 	  performance governor.
+
+config CPU_FREQ_DEFAULT_GOV_DYNAMIC_INTERACTIVE
+	bool "dynamic interactive"
+	select CPU_FREQ_GOV_DYNAMIC_INTERACTIVE
+	help
+	  Use the CPUFreq governor 'dynamic interactive' as default. This allows
+	  you to get a full dynamic cpu frequency capable system by simply
+	  loading your cpufreq low-level hardware driver, using the
+	  'interactive' governor for latency-sensitive workloads. This governor
+	  changes its tunables by itself depending on the load of the system.
 
 endchoice
 
@@ -245,6 +255,23 @@ config CPU_FREQ_GOV_HOTPLUG
 
 	  If you don't have one of these architectures or devices, use
 	  'ondemand' instead.
+
+	  If in doubt, say N.
+
+config CPU_FREQ_GOV_DYNAMIC_INTERACTIVE
+	tristate "'dynamic interactive' cpufreq policy governor"
+	help
+	  'dynamic interactive' - This driver adds a dynamic cpufreq policy governor
+	  designed for latency-sensitive workloads.
+
+	  This governor attempts to reduce the latency of clock
+	  increases so that the system is more responsive to
+	  interactive workloads.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called cpufreq_interactive.
+
+	  For details, take a look at linux/Documentation/cpu-freq.
 
 	  If in doubt, say N.
 
