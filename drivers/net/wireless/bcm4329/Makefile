@@ -72,6 +72,7 @@ EXTRA_CFLAGS = \
 	-DGET_CUSTOM_MAC_ENABLE \
 	-DCONFIG_FIRST_SCAN \
 	-DCSCAN \
+	-DPNO_SUPPORT \
 
 #	\
 	-fshort-wchar \

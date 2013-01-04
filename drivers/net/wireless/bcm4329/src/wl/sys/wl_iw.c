@@ -110,8 +110,8 @@ typedef const struct si_pub  si_t;
 
 #include <linux/rtnetlink.h>
 
-#define WL_IW_USE_ISCAN  1
-#define ENABLE_ACTIVE_PASSIVE_SCAN_SUPPRESS  1
+#define WL_IW_USE_ISCAN  0
+#define ENABLE_ACTIVE_PASSIVE_SCAN_SUPPRESS  0
 
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 25)) && 1
@@ -872,13 +872,8 @@ wl_iw_set_power_mode(
 	char *p = extra;
 	char powermode_val = 0;
 
-#ifdef EXTREME_PM
-	static int  pm = PM_MAX;
-	int pm_local = PM_FAST;
-#else
-	static int  pm = PM_FAST;
+	static int pm = PM_FAST;
 	int pm_local = PM_OFF;
-#endif
 
 	WL_TRACE_COEX(("%s: DHCP session cmd:%s\n", __FUNCTION__, extra));
 
@@ -1057,13 +1052,8 @@ wl_iw_set_btcoex_dhcp(
 
 
 #ifndef CUSTOMER_HW2
-#ifdef EXTREME_PM
-	static int  pm = PM_MAX;
-	int pm_local = PM_FAST;
-#else
 	static int  pm = PM_FAST;
 	int pm_local = PM_OFF;
-#endif // EXTREME_PM
 #endif // CUSTOMER_HW2
 
 	char powermode_val = 0;
@@ -5439,6 +5429,8 @@ wl_iw_get_encode(
 	return 0;
 }
 
+extern bool max_pm;
+
 static int
 wl_iw_set_power(
 	struct net_device *dev,
@@ -5449,11 +5441,11 @@ wl_iw_set_power(
 {
 	int error, pm;
 
-#ifdef EXTREME_PM
-	pm = vwrq->disabled ? PM_FAST : PM_MAX;
-#else	
-	pm = vwrq->disabled ? PM_OFF : PM_MAX;
-#endif // EXTREME_PM
+	if (max_pm) {
+		pm = vwrq->disabled ? PM_OFF : PM_MAX;
+	} else {
+		pm = vwrq->disabled ? PM_OFF : PM_FAST;
+	}
 
 	printk("%s: SIOCSIWPOWER, State: %d\n", dev->name, pm);
 
@@ -7877,6 +7869,7 @@ wl_iw_set_powermode(
 	}
 	error = dev_wlc_ioctl(dev, WLC_SET_PM, &mode, sizeof(mode));
 	p += snprintf(p, MAX_WX_STRING, error < 0 ? "FAIL\n" : "OK\n");
+	printk("%s: setting power mode to: %d\n", __FUNCTION__);
 	wrqu->data.length = p - extra + 1;
 	return error;
 }
