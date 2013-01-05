@@ -46,7 +46,7 @@
  * SAMPLING_PERIODS * MIN_SAMPLING_RATE is the minimum
  * load history which will be averaged
  */
-#define SAMPLING_PERIODS	10
+#define SAMPLING_PERIODS	100
 #define INDEX_MAX_VALUE		(SAMPLING_PERIODS - 1)
 /*
  * DEFAULT_MIN_SAMPLING_RATE is the base minimum sampling rate
@@ -63,8 +63,8 @@
  * These two are scaled based on num_online_cpus()
  */
 #define DEFAULT_ENABLE_ALL_LOAD_THRESHOLD	500  //(125 * CPUS_AVAILABLE)
-#define DEFAULT_ENABLE_LOAD_THRESHOLD		200
-#define DEFAULT_DISABLE_LOAD_THRESHOLD		60
+#define DEFAULT_ENABLE_LOAD_THRESHOLD		250
+#define DEFAULT_DISABLE_LOAD_THRESHOLD		105
 
 /* Control flags */
 unsigned char flags;
@@ -126,6 +126,7 @@ static void hotplug_decision_work_fn(struct work_struct *work)
 	history[index] = running;
 
 	if (debug) {
+		pr_info("avaliable_cpus is: %d\n", available_cpus);
 		pr_info("online_cpus is: %d\n", online_cpus);
 		pr_info("enable_load is: %d\n", enable_load);
 		pr_info("disable_load is: %d\n", disable_load);
@@ -199,7 +200,7 @@ static void hotplug_decision_work_fn(struct work_struct *work)
 			if (!(delayed_work_pending(&hotplug_offline_work))) {
 				if (debug)
 					pr_info("auto_hotplug: Offlining CPU, avg running: %d\n", avg_running);
-				schedule_delayed_work_on(0, &hotplug_offline_work, HZ);
+				schedule_delayed_work_on(0, &hotplug_offline_work, 2*HZ);
 			}
 			/* If boostpulse is active, clear the flags */
 			if (flags & BOOSTPULSE_ACTIVE) {
@@ -228,7 +229,7 @@ static void __cpuinit hotplug_online_all_work_fn(struct work_struct *work)
 		if (likely(!cpu_online(cpu))) {
 			cpu_up(cpu);
 			if (debug)
-				pr_info("auto_hotplug: CPU%d up.\n", cpu);
+				pr_info("auto_hotplug: all: CPU%d up.\n", cpu);
 		}
 	}
 	/*
@@ -245,9 +246,10 @@ static void hotplug_offline_all_work_fn(struct work_struct *work)
 		if (likely(cpu_online(cpu) && (cpu))) {
 			cpu_down(cpu);
 			if (debug)
-				pr_info("auto_hotplug: CPU%d down.\n", cpu);
+				pr_info("auto_hotplug: all: CPU%d down.\n", cpu);
 		}
 	}
+	schedule_delayed_work(&hotplug_unpause_work, HZ * 2);
 }
 
 static void __cpuinit hotplug_online_single_work_fn(struct work_struct *work)
@@ -259,11 +261,12 @@ static void __cpuinit hotplug_online_single_work_fn(struct work_struct *work)
 			if (!cpu_online(cpu)) {
 				cpu_up(cpu);
 				if (debug)
-					pr_info("auto_hotplug: CPU%d up.\n", cpu);
+					pr_info("auto_hotplug: single: CPU%d up.\n", cpu);
 				break;
 			}
 		}
 	}
+	schedule_delayed_work(&hotplug_unpause_work, HZ * 2);
 	schedule_delayed_work_on(0, &hotplug_decision_work, min_sampling_rate);
 }
 
@@ -271,7 +274,7 @@ static void hotplug_offline_work_fn(struct work_struct *work)
 {
 	int cpu;
 	for_each_online_cpu(cpu) {
-		if (cpu) {
+		if (likely(cpu_online(cpu) && (cpu))) {
 			cpu_down(cpu);
 			if (debug)
 				pr_info("auto_hotplug: CPU%d down.\n", cpu);
