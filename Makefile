@@ -237,7 +237,7 @@ CONFIG_SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
 
 HOSTCC       = gcc
 HOSTCXX      = g++
-HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -O2 -fomit-frame-pointer
+HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -O2
 HOSTCXXFLAGS = -O2
 
 # Decide whether to build built-in, modular, or both.
@@ -339,11 +339,11 @@ CHECK		= sparse
 
 CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 		  -Wbitwise -Wno-return-void $(CF)
-CFLAGS_MODULE   =
-AFLAGS_MODULE   =
+CFLAGS_MODULE   = -O3 -fomit-frame-pointer -funswitch-loops -mtune=cortex-a9 -mfloat-abi=softfp -mfpu=vfpv3-d16 -ftree-vectorize -ffast-math 
+AFLAGS_MODULE   = -O3 -fomit-frame-pointer -funswitch-loops -mtune=cortex-a9 -mfloat-abi=softfp -mfpu=vfpv3-d16 -ftree-vectorize -ffast-math
 LDFLAGS_MODULE  =
-CFLAGS_KERNEL	=
-AFLAGS_KERNEL	=
+CFLAGS_KERNEL	= -O3 -fomit-frame-pointer -funswitch-loops -mtune=cortex-a9 -mfloat-abi=softfp -mfpu=vfpv3-d16 -ftree-vectorize -ffast-math
+AFLAGS_KERNEL	= -O3 -fomit-frame-pointer -funswitch-loops -mtune=cortex-a9 -mfloat-abi=softfp -mfpu=vfpv3-d16 -ftree-vectorize -ffast-math
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
 # Use LINUXINCLUDE when you must reference the include/ directory.
