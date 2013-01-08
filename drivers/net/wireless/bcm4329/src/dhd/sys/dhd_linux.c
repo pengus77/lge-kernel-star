@@ -570,11 +570,13 @@ extern uint wl_dtim_val;
 #endif
 static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 {                                                                                           
-	int power_mode = PM_MAX;
+	int power_mode = PM_FAST;
 	char iovbuf[32];
-	int bcn_li_dtim = 0;
-
-	printk("%s: enter, value = %d in_suspend=%d\n", __FUNCTION__, value, dhd->in_suspend);
+#if defined(CONFIG_BRCM_LGE_WL_ARPOFFLOAD)
+	int bcn_li_dtim = wl_dtim_val;
+#else
+	int bcn_li_dtim = 3;
+#endif
 
 	if (dhd && dhd->up) {
 		if (value && dhd->in_suspend) {
@@ -593,25 +595,20 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 				}
 
 				/* Kernel suspended */
-				printk("%s: force extra Suspend setting \n", __FUNCTION__);
-
 				dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM,
 					(char *)&power_mode, sizeof(power_mode));
 
 				/* Enable packet filter, only allow unicast packet to send up */
 				dhd_set_packet_filter(1, dhd);
+				
+				bcn_li_dtim = dhd_get_dtim_skip(dhd);
+				bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim,
+					4, iovbuf, sizeof(iovbuf));
+				dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
 			}
 		} else {
 			/* Kernel resumed  */
-			printk("%s: Remove extra suspend setting \n", __FUNCTION__);
-
-			if (max_pm) {
-				power_mode = PM_FAST;
-				printk("%s: resuming in PM_FAST mode\n", __FUNCTION__);
-			} else {
-				power_mode = PM_OFF;
-				printk("%s: resuming in PM_OFF mode\n", __FUNCTION__);
-			}
+			power_mode = PM_FAST;
 
 			if(ap_priv_running == TRUE)
 			{
@@ -624,6 +621,10 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 
 				/* disable pkt filter */
 				dhd_set_packet_filter(0, dhd);
+
+				bcm_mkiovar("bcn_li_dtim", (char *)&dhd->dtim_skip,
+					4, iovbuf, sizeof(iovbuf));
+				dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
 			}
 		}
 	}

@@ -1941,7 +1941,7 @@ wl_cfg80211_set_power_mgmt(struct wiphy *wiphy, struct net_device *dev,
 #endif
 	CHECK_SYS_UP();
 
-	int pmode = enabled ? PM_MAX : PM_OFF;
+	int pmode = enabled ? PM_FAST : PM_OFF;
 
 	pm = htod32(pm);
 	WL_DBG(("power save %s\n", (pm ? "enabled" : "disabled")));
