@@ -1052,8 +1052,8 @@ wl_iw_set_btcoex_dhcp(
 
 
 #ifndef CUSTOMER_HW2
-	static int  pm = PM_FAST;
-	int pm_local = PM_OFF;
+	static int pm = ((max_pm) ? PM_MAX : PM_FAST);
+	int pm_local = ((max_pm) ? PM_FAST : PM_OFF);
 #endif // CUSTOMER_HW2
 
 	char powermode_val = 0;
@@ -5442,7 +5442,7 @@ wl_iw_set_power(
 	int error, pm;
 
 	if (max_pm) {
-		pm = vwrq->disabled ? PM_OFF : PM_MAX;
+		pm = vwrq->disabled ? PM_FAST : PM_MAX;
 	} else {
 		pm = vwrq->disabled ? PM_OFF : PM_FAST;
 	}
@@ -7862,6 +7862,8 @@ wl_iw_set_powermode(
 	if (sscanf(extra, "%*s %d", &mode) != 1)
 		return -EINVAL;
 
+	printk("%s: powermode before overwriting it: %d\n", __FUNCTION__, mode);
+
 	switch (mode) {
 	case 0: mode = 2; break; /* Fast PS mode */
 	case 1: mode = 0; break; /* No PS mode */
@@ -7869,7 +7871,7 @@ wl_iw_set_powermode(
 	}
 	error = dev_wlc_ioctl(dev, WLC_SET_PM, &mode, sizeof(mode));
 	p += snprintf(p, MAX_WX_STRING, error < 0 ? "FAIL\n" : "OK\n");
-	printk("%s: setting power mode to: %d\n", __FUNCTION__);
+	printk("%s: setting power mode to: %d\n", __FUNCTION__, mode);
 	wrqu->data.length = p - extra + 1;
 	return error;
 }
