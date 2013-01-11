@@ -46,7 +46,7 @@
  * SAMPLING_PERIODS * MIN_SAMPLING_RATE is the minimum
  * load history which will be averaged
  */
-#define SAMPLING_PERIODS	100
+#define SAMPLING_PERIODS	50
 #define INDEX_MAX_VALUE		(SAMPLING_PERIODS - 1)
 /*
  * DEFAULT_MIN_SAMPLING_RATE is the base minimum sampling rate
@@ -64,7 +64,7 @@
  */
 #define DEFAULT_ENABLE_ALL_LOAD_THRESHOLD	500  //(125 * CPUS_AVAILABLE)
 #define DEFAULT_ENABLE_LOAD_THRESHOLD		250
-#define DEFAULT_DISABLE_LOAD_THRESHOLD		105
+#define DEFAULT_DISABLE_LOAD_THRESHOLD		80
 
 /* Control flags */
 unsigned char flags;
@@ -200,7 +200,7 @@ static void hotplug_decision_work_fn(struct work_struct *work)
 			if (!(delayed_work_pending(&hotplug_offline_work))) {
 				if (debug)
 					pr_info("auto_hotplug: Offlining CPU, avg running: %d\n", avg_running);
-				schedule_delayed_work_on(0, &hotplug_offline_work, 2*HZ);
+				schedule_delayed_work_on(0, &hotplug_offline_work, HZ);
 			}
 			/* If boostpulse is active, clear the flags */
 			if (flags & BOOSTPULSE_ACTIVE) {
@@ -249,7 +249,6 @@ static void hotplug_offline_all_work_fn(struct work_struct *work)
 				pr_info("auto_hotplug: all: CPU%d down.\n", cpu);
 		}
 	}
-	schedule_delayed_work(&hotplug_unpause_work, HZ * 2);
 }
 
 static void __cpuinit hotplug_online_single_work_fn(struct work_struct *work)
@@ -266,7 +265,6 @@ static void __cpuinit hotplug_online_single_work_fn(struct work_struct *work)
 			}
 		}
 	}
-	schedule_delayed_work(&hotplug_unpause_work, HZ * 2);
 	schedule_delayed_work_on(0, &hotplug_decision_work, min_sampling_rate);
 }
 
@@ -381,6 +379,7 @@ int __init auto_hotplug_init(void)
 {
 	pr_info("auto_hotplug: v0.220 by _thalamus\n");
 	pr_info("auto_hotplug: rev 1 enhanced by motley\n");
+	pr_info("auto_hotplug: rev 1.1 bufgixes by pengus77\n");
 	pr_info("auto_hotplug: %d CPUs detected\n", CPUS_AVAILABLE);
 
 	INIT_DELAYED_WORK(&hotplug_decision_work, hotplug_decision_work_fn);
