@@ -1052,8 +1052,8 @@ wl_iw_set_btcoex_dhcp(
 
 
 #ifndef CUSTOMER_HW2
-	static int pm = ((max_pm) ? PM_MAX : PM_FAST);
-	int pm_local = ((max_pm) ? PM_FAST : PM_OFF);
+	static int pm = PM_FAST;
+	int pm_local = PM_OFF;
 #endif // CUSTOMER_HW2
 
 	char powermode_val = 0;
@@ -5430,8 +5430,6 @@ wl_iw_get_encode(
 	return 0;
 }
 
-extern bool max_pm;
-
 static int
 wl_iw_set_power(
 	struct net_device *dev,
@@ -5442,11 +5440,7 @@ wl_iw_set_power(
 {
 	int error, pm;
 
-	if (max_pm) {
-		pm = vwrq->disabled ? PM_FAST : PM_MAX;
-	} else {
-		pm = vwrq->disabled ? PM_OFF : PM_FAST;
-	}
+	pm = vwrq->disabled ? PM_OFF : PM_MAX;
 
 	printk("%s: SIOCSIWPOWER, State: %d\n", dev->name, pm);
 
@@ -7846,6 +7840,8 @@ int wl_iw_process_private_ascii_cmd(
 }
 #endif 
 
+static int last_command = -1;
+
 /* LGE_CHANGE_S [yoohoo@lge.com] 2009-05-14, support private command */
 #if defined(CONFIG_LGE_BCM432X_PATCH)
 static int
@@ -7856,20 +7852,19 @@ wl_iw_set_powermode(
 	char *extra
 )
 {
-	int mode = -1;
+	int mode = PM_FAST;
 	int error;
 	char *p = extra;
-
+/*
 	if (sscanf(extra, "%*s %d", &mode) != 1)
 		return -EINVAL;
 
-	printk("%s: powermode before overwriting it: %d\n", __FUNCTION__, mode);
-
 	switch (mode) {
-	case 0: mode = 2; break; /* Fast PS mode */
-	case 1: mode = 0; break; /* No PS mode */
-	default: return -EINVAL;
+		case 0: mode = 2; break;
+		case 1: mode = 0; break;
+		default: return -EINVAL;
 	}
+*/
 	error = dev_wlc_ioctl(dev, WLC_SET_PM, &mode, sizeof(mode));
 	p += snprintf(p, MAX_WX_STRING, error < 0 ? "FAIL\n" : "OK\n");
 	printk("%s: setting power mode to: %d\n", __FUNCTION__, mode);
