@@ -164,7 +164,7 @@ static int wifi_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	DHD_TRACE(("##> %s\n", __FUNCTION__));
 	#if defined (OOB_INTR_ONLY)
-	bcmsdh_oob_intr_set(0);
+		bcmsdh_oob_intr_set(0);
 	#endif
 	return 0;
 }
@@ -172,8 +172,8 @@ static int wifi_resume(struct platform_device *pdev)
 {
 	DHD_TRACE(("##> %s\n", __FUNCTION__));
 	#if defined (OOB_INTR_ONLY)
-        bcmsdh_oob_intr_set(1);
-        #endif
+		bcmsdh_oob_intr_set(1);
+	#endif
 	return 0;
 }
 
@@ -569,14 +569,10 @@ module_param(max_pm, bool, 0755);
 extern uint wl_dtim_val;
 #endif
 static int dhd_set_suspend(int value, dhd_pub_t *dhd)
-{                                                                                           
-	int power_mode = PM_FAST;
+{
+	int power_mode = -1;
 	char iovbuf[32];
-#if defined(CONFIG_BRCM_LGE_WL_ARPOFFLOAD)
-	int bcn_li_dtim = wl_dtim_val;
-#else
-	int bcn_li_dtim = 3;
-#endif
+	int bcn_li_dtim = 0;
 
 	if (dhd && dhd->up) {
 		if (value && dhd->in_suspend) {
@@ -608,7 +604,6 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 			}
 		} else {
 			/* Kernel resumed  */
-			power_mode = PM_FAST;
 
 			if(ap_priv_running == TRUE)
 			{
@@ -616,6 +611,8 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 			}
 			else
 			{
+				power_mode = PM_FAST;
+
 				dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM, (char *)&power_mode,
 					sizeof(power_mode));
 
@@ -635,13 +632,14 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 static void dhd_suspend_resume_helper(struct dhd_info *dhd, int val)
 {
 	dhd_pub_t *dhdp = &dhd->pub;
-
+	WAKE_LOCK(&dhd->pub, WAKE_LOCK_WATCHDOG);
 	dhd_os_proto_block(dhdp);
 	/* Set flag when early suspend was called */
 	dhdp->in_suspend = val;
 	if (!dhdp->suspend_disable_flag)
 		dhd_set_suspend(val, dhdp);
 	dhd_os_proto_unblock(dhdp);
+	WAKE_UNLOCK(&dhd->pub, WAKE_LOCK_WATCHDOG);
 }
 
 static void dhd_early_suspend(struct early_suspend *h)
@@ -1006,6 +1004,17 @@ dhd_op_if(dhd_if_t *ifp)
 					current->pid, ifp->net->name));
 				ifp->state = 0;
 			}
+
+#if defined(CONFIG_LGE_BCM432X_PATCH)
+			if(ap_priv_running == TRUE)
+			{
+				int power_mode = PM_OFF;
+
+				dhdcdc_set_ioctl(&dhd->pub, 0, WLC_SET_PM,
+					(char *)&power_mode, sizeof(power_mode));
+				printk("%s: Setting card power mode: %s\n", __FUNCTION__, ((ap_priv_running) ? "PM_OFF" : "PM_FAST"));
+			}
+#endif
 		}
 		break;
 	case WLC_E_IF_DEL:
@@ -3238,9 +3247,11 @@ int net_os_set_suspend(struct net_device *dev, int val)
 	dhd_info_t *dhd = *(dhd_info_t **)netdev_priv(dev);
 
 	if (dhd) {
+		WAKE_LOCK(&dhd->pub, WAKE_LOCK_WATCHDOG);
 		dhd_os_proto_block(&dhd->pub);
 		ret = dhd_set_suspend(val, &dhd->pub);
 		dhd_os_proto_unblock(&dhd->pub);
+		WAKE_UNLOCK(&dhd->pub, WAKE_LOCK_WATCHDOG);
 	}
 #endif /* defined(CONFIG_HAS_EARLYSUSPEND) */
 	return ret;
