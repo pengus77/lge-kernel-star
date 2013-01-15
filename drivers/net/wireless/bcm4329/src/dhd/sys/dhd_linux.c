@@ -564,6 +564,12 @@ static void dhd_set_packet_filter(int value, dhd_pub_t *dhd)
 bool max_pm=false;
 module_param(max_pm, bool, 0755);
 
+bool wake_pm=true;
+module_param(wake_pm, bool, 0755);
+
+bool hotspot_pm=false;
+module_param(hotspot_pm, bool, 0755);
+
 #if defined(CONFIG_HAS_EARLYSUSPEND)
 #if defined(CONFIG_BRCM_LGE_WL_ARPOFFLOAD)	/*Setting dtim.	20110120*/
 extern uint wl_dtim_val;
@@ -612,6 +618,8 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 			else
 			{
 				power_mode = PM_FAST;
+				if (!wake_pm && !max_pm)
+					power_mode = PM_OFF;
 
 				dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM, (char *)&power_mode,
 					sizeof(power_mode));
@@ -1009,10 +1017,12 @@ dhd_op_if(dhd_if_t *ifp)
 			if(ap_priv_running == TRUE)
 			{
 				int power_mode = PM_OFF;
+				if (hotspot_pm)
+					power_mode = PM_FAST;
 
 				dhdcdc_set_ioctl(&dhd->pub, 0, WLC_SET_PM,
 					(char *)&power_mode, sizeof(power_mode));
-				printk("%s: Setting card power mode: %s\n", __FUNCTION__, ((ap_priv_running) ? "PM_OFF" : "PM_FAST"));
+				printk("%s: Setting card power mode: %s\n", __FUNCTION__, ((power_mode == PM_FAST) ? "PM_FAST" : "PM_OFF"));
 			}
 #endif
 		}
