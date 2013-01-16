@@ -53,6 +53,8 @@
 
 #include <mach/iomap.h>
 
+#include <linux/cpufreq.h>
+
 #include "fsl_usb2_udc.h"
 
 #ifdef CONFIG_ARCH_TEGRA
@@ -2127,10 +2129,10 @@ static void fsl_udc_boost_cpu_frequency_work(struct work_struct* work)
 	if (ep_queue_request_count && boost_cpufreq_work_flag) {
 		pm_qos_update_request(&boost_cpu_freq_req, (s32)CONFIG_TEGRA_GADGET_BOOST_CPU_FREQ * 1000);
 		boost_cpufreq_work_flag = 0;
-	} else if (!ep_queue_request_count && !boost_cpufreq_work_flag) {
+	} /*else if (!ep_queue_request_count && !boost_cpufreq_work_flag) {
 		pm_qos_update_request(&boost_cpu_freq_req, PM_QOS_DEFAULT_VALUE);
 		boost_cpufreq_work_flag = 1;
-	}
+	}*/
 }
 #endif
 
