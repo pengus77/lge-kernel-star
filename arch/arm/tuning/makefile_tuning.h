@@ -3,8 +3,6 @@
 #
 
 ifeq ($(CONFIG_MACH_STAR),y)
-KBUILD_CFLAGS  += $(call cc-option,-O3)
-KBUILD_CFLAGS  += $(call cc-option,-funswitch-loops)
 KBUILD_CFLAGS  += $(call cc-option,-mfloat-abi=softfp,-msoft-float)
 KBUILD_CFLAGS  += $(call cc-option,-mfpu=vfpv3-d16)
 KBUILD_CFLAGS  += $(call cc-option,-ftree-loop-linear)
@@ -14,7 +12,6 @@ KBUILD_CFLAGS  += $(call cc-option,-fgraphite-identity)
 KBUILD_CFLAGS  += $(call cc-option,-floop-nest-optimize)
 KBUILD_CFLAGS  += $(call cc-option,-floop-parallelize-all)
 KBUILD_CFLAGS  += $(call cc-option,-ftree-loop-distribution)
-KBUILD_CFLAGS  += $(call cc-option,-fsingle-precision-constant)
 
 KBUILD_AFLAGS  += $(call as-option,-Wa$(comma)-mfloat-abi=softfp,-Wa$(comma)-msoft-float)
 KBUILD_AFLAGS  += $(call as-option,-Wa$(comma)-mfpu=vfpv3-d16)
