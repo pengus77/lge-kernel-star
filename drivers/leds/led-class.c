@@ -77,6 +77,24 @@ static ssize_t led_max_brightness_show(struct device *dev,
 	return sprintf(buf, "%u\n", led_cdev->max_brightness);
 }
 
+static ssize_t led_max_brightness_store(struct device *dev,
+							   struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+	unsigned long max = simple_strtoul(buf, NULL, 10);
+
+	if (max > LED_FULL) {
+		max = LED_FULL;
+	}
+
+	if (max < LED_OFF) {
+		max = LED_OFF;
+	}
+
+	led_cdev->max_brightness = max;
+	return size;
+}
+
 static ssize_t led_br_maintain_on_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
@@ -84,7 +102,7 @@ static ssize_t led_br_maintain_on_store(struct device *dev,
 	int	state	=	simple_strtol(buf, NULL, 10);
 	if (state){
 		printk(KERN_ERR "[pwr_led]: SYSFS_LED br_maintain_on trigger is 1!\n");
-		led_set_brightness(led_cdev, 255);
+		led_set_brightness(led_cdev, led_cdev->brightness);
 		led_cdev->br_maintain_trigger = 1;
 	} else{
 		printk(KERN_ERR "[pwr_led]: SYSFS_LED br_maintain_on trigger is 0!\n");
@@ -174,7 +192,7 @@ static struct device_attribute led_class_attrs[] = {
 	__ATTR(brightness, 0666 /*0644*/, led_brightness_show, led_brightness_store),
 // MOBII_S [shhong@mobii.co.kr] 2012-06-25: Add Led Retain Code.
 #if defined(CONFIG_MACH_STAR)
-	__ATTR(max_brightness, 0444, led_max_brightness_show, NULL),
+	__ATTR(max_brightness, 0666, led_max_brightness_show, led_max_brightness_store),
 	__ATTR(br_maintain_on, 0660, led_br_maintain_on_show, led_br_maintain_on_store),
 	__ATTR(pulse, 0666, led_pulse_show, led_pulse_store),
 	__ATTR(pulse_interval, 0666, led_pulse_interval_show, led_pulse_interval_store),

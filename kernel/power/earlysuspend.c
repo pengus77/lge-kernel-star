@@ -106,7 +106,7 @@ static void early_suspend(struct work_struct *work)
 #if 0
 	// org sys_sync();
 	suspend_sys_sync_queue();
-#else
+// #else
     sys_sync();
 #endif
 /* LGE_CHANGE_E, ryu.seeyeol@lge.com, 2012-02-24, repair sys_sync() func in early_suspend or suspend. Merge from IS11LG GB */

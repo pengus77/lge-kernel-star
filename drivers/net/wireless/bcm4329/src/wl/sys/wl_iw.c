@@ -110,7 +110,7 @@ typedef const struct si_pub  si_t;
 
 #include <linux/rtnetlink.h>
 
-#define WL_IW_USE_ISCAN  0
+#define WL_IW_USE_ISCAN  1
 #define ENABLE_ACTIVE_PASSIVE_SCAN_SUPPRESS 0
 
 
