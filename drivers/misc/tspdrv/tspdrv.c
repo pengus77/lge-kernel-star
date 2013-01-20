@@ -47,6 +47,12 @@
 #include <tspdrvRecorder.c>
 #endif
 
+#define MAX_VIBRATOR_FORCE 127
+#define DEFAULT_VIBRATOR_FORCE 127
+
+static int vibrator_force_max = MAX_VIBRATOR_FORCE;
+static int vibrator_force = DEFAULT_VIBRATOR_FORCE;
+
 /* Device name and version information */
 #define VERSION_STR " v3.4.55.8\n"                  /* DO NOT CHANGE - this is auto-generated */
 #define VERSION_STR_LEN 16                          /* account extra space for future extra digits in version number */
@@ -135,7 +141,7 @@ static struct platform_driver platdrv =
     .driver = 
     {		
         .name = MODULE_NAME,	
-    },	
+    },
 };
 
 static void platform_release(struct device *dev);
@@ -154,6 +160,82 @@ static struct platform_device platdev =
 MODULE_AUTHOR("Immersion Corporation");
 MODULE_DESCRIPTION("TouchSense Kernel Module");
 MODULE_LICENSE("GPL v2");
+
+static ssize_t show_vibrator_force_max(struct device *dev,
+									   struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf,"%d\n", vibrator_force_max);
+}
+
+static ssize_t show_vibrator_force(struct device *dev,
+								   struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf,"%d\n", vibrator_force);
+}
+
+static ssize_t store_vibrator_force(struct device *dev,
+									struct device_attribute *attr,
+									const char *buf, size_t len)
+{
+	long data = simple_strtol(buf, NULL, 10);
+
+	if (data > MAX_VIBRATOR_FORCE) {
+		vibrator_force = MAX_VIBRATOR_FORCE;
+	} else if (data < (-1 * MAX_VIBRATOR_FORCE)) {
+		vibrator_force = (-1 * MAX_VIBRATOR_FORCE);
+	} else {
+		vibrator_force = data;
+	}
+
+	return len;
+}
+
+static ssize_t show_vibrator_level_max(struct device *dev,
+									   struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf,"%d\n", vibrator_level_max);
+}
+
+static ssize_t show_vibrator_level(struct device *dev,
+								   struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf,"%d\n", vibrator_level);
+}
+
+static ssize_t store_vibrator_level(struct device *dev,
+									struct device_attribute *attr,
+									const char *buf, size_t len)
+{
+	long data = simple_strtol(buf, NULL, 10);
+
+	pwm_disable(nv_vib_pwm);
+	if (data > MAX_VIBRATOR_LEVEL) {
+		vibrator_level = MAX_VIBRATOR_LEVEL;
+	} else if (data < DEFAULT_VIBRATOR_LEVEL) {
+		vibrator_level = DEFAULT_VIBRATOR_LEVEL;
+	} else {
+		vibrator_level = data;
+	}
+
+	return len;
+}
+
+static DEVICE_ATTR(vibrator_level_max, 0644, show_vibrator_level_max, NULL);
+static DEVICE_ATTR(vibrator_level, 0666, show_vibrator_level, store_vibrator_level);
+static DEVICE_ATTR(vibrator_force_max, 0644, show_vibrator_force_max, NULL);
+static DEVICE_ATTR(vibrator_force, 0666, show_vibrator_force, store_vibrator_force);
+
+static struct attribute *my_attributes[] = {
+	&dev_attr_vibrator_level.attr,
+	&dev_attr_vibrator_level_max.attr,
+	&dev_attr_vibrator_force.attr,
+	&dev_attr_vibrator_force_max.attr,
+	NULL,
+};
+
+static struct attribute_group attr_group = {
+	.attrs = my_attributes,
+};
 
 int __init tspdrv_init( void )
 {
@@ -189,6 +271,11 @@ int __init tspdrv_init( void )
     {
         DbgOut((KERN_ERR "tspdrv: platform_driver_register failed.\n"));
     }
+
+	nRet = sysfs_create_group(&platdev.dev.kobj, &attr_group);
+	if (!nRet) {
+		printk("%s: Cannot create device attributes !\n", __FUNCTION__);
+	}
 
     DbgRecorderInit(());
 
@@ -417,7 +504,7 @@ static int ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsig
 #ifdef QA_TEST
     int i;
 #endif
-    VibeInt8 nForce[1] = {128};
+    VibeInt8 nForce[1] = {(VibeInt8)vibrator_level};
 
 	DbgOut((KERN_INFO "[tspdrv] : ioctl cmd = %d   %x\n", cmd, cmd ));
     switch (cmd)
