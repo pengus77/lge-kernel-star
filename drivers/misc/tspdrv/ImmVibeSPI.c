@@ -41,18 +41,19 @@
 
 extern int device_power_control(char* reg_id, bool on);
 
+#define MAX_VIBRATOR_LEVEL 67200
+#define DEFAULT_VIBRATOR_LEVEL 22400
+
+static int vibrator_level_max = MAX_VIBRATOR_LEVEL;
+static int vibrator_level = DEFAULT_VIBRATOR_LEVEL;
+
 /*
 ** This SPI supports only one actuator.
 */
 #define NUM_ACTUATORS   1
 #define VIB_DEBUG       1
 
-
-#define NV_PWM_PERIOD_22_4HZ_NS     22400  // 22.4 kHz     
 #define NV_PWM_NS                   1000*1000*1000
-#define NV_PWM_PERIOD_22_4HZ_TO_NS  (NV_PWM_NS/NV_PWM_PERIOD_22_4HZ_NS) 
-
-#define NV_PWM_DUTY_50_TO_NS        (NV_PWM_PERIOD_22_4HZ_TO_NS >> 1) // 50%
 
 static struct pwm_device* nv_vib_pwm = NULL;
 
@@ -63,6 +64,11 @@ static int nv_vibe_gpio_en =  TEGRA_GPIO_PF3;
 #else
 static int nv_vibe_gpio_en =  TEGRA_GPIO_PU4;
 #endif
+
+static int get_period_to_ns(void)
+{
+	return NV_PWM_NS / vibrator_level;
+}
 
 static void nv_vibrator_gpio_enable (int enable)
 {
@@ -95,7 +101,9 @@ static void vib_generatePWM(int on)
     }
     
 	if(on) {
-        pwm_config(nv_vib_pwm, NV_PWM_DUTY_50_TO_NS, NV_PWM_PERIOD_22_4HZ_TO_NS);
+		int period = get_period_to_ns();
+		int period_50 = period >> 1;
+        pwm_config(nv_vib_pwm, period, period_50);
         pwm_enable(nv_vib_pwm);
 	}
 	else {
@@ -263,9 +271,9 @@ IMMVIBESPIAPI VibeStatus ImmVibeSPI_ForceOut_SetSamples(VibeUInt8 nActuatorIndex
         nv_vibrator_gpio_enable(1);
 
         
-        nTmp = (((nForce+128) * (NV_PWM_PERIOD_22_4HZ_TO_NS)) >> 8); // cal duty ns 
+        nTmp = (((nForce+128) * (get_period_to_ns())) >> 8); // cal duty ns
             
-        pwm_config(nv_vib_pwm, nTmp, NV_PWM_PERIOD_22_4HZ_TO_NS);
+        pwm_config(nv_vib_pwm, nTmp, get_period_to_ns());
         pwm_enable(nv_vib_pwm);
     }        
 

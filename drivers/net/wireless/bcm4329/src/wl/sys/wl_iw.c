@@ -216,7 +216,7 @@ static volatile uint g_first_counter_scans;
 #endif 
 
 #if defined(WL_IW_USE_ISCAN)
-#if  !defined(CSCAN)
+#ifndef CSCAN
 static void wl_iw_free_ss_cache(void);
 static int   wl_iw_run_ss_cache_timer(int kick_off);
 #endif 
@@ -7841,6 +7841,7 @@ int wl_iw_process_private_ascii_cmd(
 #endif 
 
 extern bool wake_pm;
+extern bool max_pm;
 
 /* LGE_CHANGE_S [yoohoo@lge.com] 2009-05-14, support private command */
 #if defined(CONFIG_LGE_BCM432X_PATCH)
@@ -7852,12 +7853,12 @@ wl_iw_set_powermode(
 	char *extra
 )
 {
-	int mode = PM_FAST;
+	int mode = PM_OFF;
 	int error;
 	char *p = extra;
 
-	if (!wake_pm)
-		mode = PM_OFF;
+	if (wake_pm || max_pm)
+		mode = PM_FAST;
 
 	error = dev_wlc_ioctl(dev, WLC_SET_PM, &mode, sizeof(mode));
 	p += snprintf(p, MAX_WX_STRING, error < 0 ? "FAIL\n" : "OK\n");
