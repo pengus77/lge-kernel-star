@@ -9412,8 +9412,12 @@ int wl_iw_attach(struct net_device *dev, void * dhdp)
 	g_iscan->scan_flag = 0;
 #endif 
 
-	
-	iscan->timer_ms    = 3000;
+	/* 
+	 * Ivan Cerrato: align the scan time to aosp values.
+	 * 3000 ms is an insanely short time. 8000 ms is more
+	 * realistic.
+	 */
+	iscan->timer_ms    = 8000;
 	init_timer(&iscan->timer);
 	iscan->timer.data = (ulong)iscan;
 	iscan->timer.function = wl_iw_timerfunc;
