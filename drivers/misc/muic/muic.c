@@ -663,7 +663,7 @@ void check_charging_mode(void)
 	value = i2c_smbus_read_byte_data(muic_client, INT_STAT);
 
 	if (value & V_VBUS) {
-		if (force_fast_charge == false){ /* auto mode */
+		if (!force_fast_charge){ /* auto mode */
 			if ((value & IDNO) == IDNO_0010 || 
 			    (value & IDNO) == IDNO_0100 ||
 			    (value & IDNO) == IDNO_1001 ||
