@@ -86,6 +86,7 @@
 #include <lge/bssq_charger_rt.h>
 #endif
 #include <linux/lge_hw_rev.h>
+
 extern int muic_boot_keeping;
 extern int muic_boot_path;
 
@@ -125,6 +126,10 @@ static struct work_struct muic_work;
 static struct work_struct muic_wq;
 #endif
 static u8 muic_device;
+
+#ifdef CONFIG_FORCE_FAST_CHARGE
+extern bool force_fast_charge; /* fast charge */
+#endif
 
 static unsigned int muic_gpio_irq = NULL;
 TYPE_USIF_MODE usif_mode = USIF_AP;
@@ -656,19 +661,24 @@ void check_charging_mode(void)
 	s32 value;
 
 	value = i2c_smbus_read_byte_data(muic_client, INT_STAT);
+
 	if (value & V_VBUS) {
-		if ((value & IDNO) == IDNO_0010 || 
-				(value & IDNO) == IDNO_0100 ||
-				(value & IDNO) == IDNO_1001 ||
-			(value & IDNO) == IDNO_1010 /*||
-			(boot_retain_mode == RETAIN_AP_USB && retain_mode == RETAIN_AP_USB)*/)	//[gieseo.park@lge.com] force set CHARGING_FACTORY on Boot RETAIN_AP_USB mode. (for MilkyU device)
-			charging_mode = CHARGING_FACTORY;
-		else if (value & CHGDET) 
+		if (force_fast_charge == false){ /* auto mode */
+			if ((value & IDNO) == IDNO_0010 || 
+			    (value & IDNO) == IDNO_0100 ||
+			    (value & IDNO) == IDNO_1001 ||
+			    (value & IDNO) == IDNO_1010 /*||
+				(boot_retain_mode == RETAIN_AP_USB && retain_mode == RETAIN_AP_USB)*/)	//[gieseo.park@lge.com] force set CHARGING_FACTORY on Boot RETAIN_AP_USB mode. (for MilkyU device)
+				charging_mode = CHARGING_FACTORY;
+			else if (value & CHGDET) 
+				charging_mode = CHARGING_LG_TA;
+			else
+				charging_mode = CHARGING_USB;
+		}else /* fast charge */
 			charging_mode = CHARGING_LG_TA;
-		else
-			charging_mode = CHARGING_USB;
 	} else
 		charging_mode = CHARGING_NONE;
+
 
 	//set_muic_charger_detected();	//not done here. Moved to other functions
 }
