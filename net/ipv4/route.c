@@ -2622,10 +2622,10 @@ static struct rtable *ip_route_output_slow(struct net *net,
 		goto out;
 	}
 
-	if (!fl4->saddr)
-		fl4->saddr = FIB_RES_PREFSRC(net, res);
+	if (!fl4.saddr)
+		fl4.saddr = FIB_RES_PREFSRC(net, res);
 
-	fl4->flowi4_oif = dev_out->ifindex;
+	fl4.flowi4_oif = dev_out->ifindex;
 
 
 make_route:
