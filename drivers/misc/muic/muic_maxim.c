@@ -238,7 +238,7 @@ void set_max14526_muic_mode(unsigned char int_stat_value)
 			muic_mode = MUIC_MHL;
 			charging_mode = CHARGING_USB;
 #endif
-		} else if (int_stat_value & CHGDET || force_fast_charge) {
+		} else if (int_stat_value & CHGDET) {
 #if defined(CONFIG_MACH_STAR_P990) || defined(CONFIG_MACH_STAR_SU660) || defined(CONFIG_MACH_STAR_P999)
 			printk("[****MUIC****] Detect Charger CHGDET!!!!");
 			muic_i2c_write_byte(SW_CONTROL, COMP2_TO_HZ | COMN1_TO_HZ);
