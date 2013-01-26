@@ -110,8 +110,9 @@ typedef const struct si_pub  si_t;
 
 #include <linux/rtnetlink.h>
 
-#define WL_IW_USE_ISCAN  1
-#define ENABLE_ACTIVE_PASSIVE_SCAN_SUPPRESS 0
+
+#define WL_IW_USE_ISCAN 1
+#define ENABLE_ACTIVE_PASSIVE_SCAN_SUPPRESS 1
 
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 25)) && 1
@@ -216,7 +217,7 @@ static volatile uint g_first_counter_scans;
 #endif 
 
 #if defined(WL_IW_USE_ISCAN)
-#ifndef CSCAN
+#if !defined(CSCAN)
 static void wl_iw_free_ss_cache(void);
 static int   wl_iw_run_ss_cache_timer(int kick_off);
 #endif 
@@ -2010,7 +2011,7 @@ wl_iw_control_wl_off_softap(
 
 #if defined(WL_IW_USE_ISCAN)
 		
-#if  !defined(CSCAN)
+#ifndef CSCAN
 		wl_iw_free_ss_cache();
 		wl_iw_run_ss_cache_timer(0);
 		memset(g_scan, 0, G_SCAN_RESULTS);
@@ -7841,7 +7842,6 @@ int wl_iw_process_private_ascii_cmd(
 #endif 
 
 extern bool wake_pm;
-extern bool max_pm;
 
 /* LGE_CHANGE_S [yoohoo@lge.com] 2009-05-14, support private command */
 #if defined(CONFIG_LGE_BCM432X_PATCH)
@@ -7857,12 +7857,21 @@ wl_iw_set_powermode(
 	int error;
 	char *p = extra;
 
-	if (wake_pm || max_pm)
+	if (wake_pm)
 		mode = PM_FAST;
 
 	error = dev_wlc_ioctl(dev, WLC_SET_PM, &mode, sizeof(mode));
 	p += snprintf(p, MAX_WX_STRING, error < 0 ? "FAIL\n" : "OK\n");
 	wrqu->data.length = p - extra + 1;
+
+	/*
+	 * Let's hardcode a default of 79mW - 19dBm to be at least within EU regulations
+	 * The unmanaged firmware was setting the txpower to 1494mW - 32dBm. Insane.
+	 */
+	if (dev_wlc_intvar_set(dev, "qtxpower", (int)(bcm_mw_to_qdbm(79)))) {
+		printk("%s: cannot set txpower !\n", __FUNCTION__);
+	}
+
 	return error;
 }
 

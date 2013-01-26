@@ -578,7 +578,7 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 {
 	int power_mode = -1;
 	char iovbuf[32];
-	int bcn_li_dtim = 0;
+	int bcn_li_dtim = 3;
 
 	if (dhd && dhd->up) {
 		if (value && dhd->in_suspend) {
@@ -602,8 +602,7 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 
 				/* Enable packet filter, only allow unicast packet to send up */
 				dhd_set_packet_filter(1, dhd);
-				
-				bcn_li_dtim = dhd_get_dtim_skip(dhd);
+
 				bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim,
 					4, iovbuf, sizeof(iovbuf));
 				dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
@@ -617,9 +616,9 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 			}
 			else
 			{
-				power_mode = PM_FAST;
-				if (!wake_pm && !max_pm)
-					power_mode = PM_OFF;
+				power_mode = PM_OFF;
+				if (wake_pm)
+					power_mode = PM_FAST;
 
 				dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM, (char *)&power_mode,
 					sizeof(power_mode));
