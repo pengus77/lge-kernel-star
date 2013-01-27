@@ -14,34 +14,36 @@
 #include <linux/sysfs.h>
 #include <linux/slab.h>
 
-bool force_fast_charge;
+bool force_fast_charge = false;
 
 /* sysfs interface */
 static ssize_t force_fast_charge_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-return sprintf(buf, "%d\n", force_fast_charge);
+	return sprintf(buf, "%d\n", force_fast_charge);
 }
 
 static ssize_t force_fast_charge_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
 {
-unsigned long check = simple_strtoul(buf, NULL, 8);
-if (check)
-	force_fast_charge = true;
-else
-	force_fast_charge = false;
-return count;
+	unsigned long check = simple_strtoul(buf, NULL, 10);
+
+	if (check)
+		force_fast_charge = true;
+	else
+		force_fast_charge = false;
+
+	return count;
 }
 
 static struct kobj_attribute force_fast_charge_attribute =
-__ATTR(force_fast_charge, 0666, force_fast_charge_show, force_fast_charge_store);
+	__ATTR(force_fast_charge, 0666, force_fast_charge_show, force_fast_charge_store);
 
 static struct attribute *attrs[] = {
-&force_fast_charge_attribute.attr,
-NULL,
+	&force_fast_charge_attribute.attr,
+	NULL,
 };
 
 static struct attribute_group attr_group = {
-.attrs = attrs,
+	.attrs = attrs,
 };
 
 static struct kobject *force_fast_charge_kobj;
@@ -50,16 +52,16 @@ static int __init force_fast_charge_init(void)
 {
 	int retval;
 
-	force_fast_charge = false;
+	force_fast_charge_kobj = kobject_create_and_add("fast_charge", kernel_kobj);
+	if (!force_fast_charge_kobj) {
+		return -ENOMEM;
+	}
 
-        force_fast_charge_kobj = kobject_create_and_add("fast_charge", kernel_kobj);
-        if (!force_fast_charge_kobj) {
-                return -ENOMEM;
-        }
-        retval = sysfs_create_group(force_fast_charge_kobj, &attr_group);
-        if (retval)
-                kobject_put(force_fast_charge_kobj);
-        return retval;
+	retval = sysfs_create_group(force_fast_charge_kobj, &attr_group);
+	if (retval)
+		kobject_put(force_fast_charge_kobj);
+		
+	return retval;
 }
 /* end sysfs interface */
 
