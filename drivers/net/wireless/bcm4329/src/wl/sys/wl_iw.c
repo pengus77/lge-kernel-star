@@ -4221,7 +4221,7 @@ wl_iw_iscan_set_scan(
 	}
 #endif 
 
-#ifdef CONFIG_KOWALSKI_WIFI_PM &&
+#ifdef CONFIG_KOWALSKI_WIFI_PM
 	if (g_first_counter_scans == 1) {
 		if (curr_dev != dev)
 			curr_dev = dev;
