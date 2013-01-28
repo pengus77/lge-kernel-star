@@ -601,6 +601,101 @@ dev_wlc_intvar_get(
 	return (error);
 }
 
+#ifdef CONFIG_KOWALSKI_WIFI_PM
+
+// #define DBM_TIMER_RUNNING (1 << 0)
+
+// static struct mutex dbm_mutex;
+// static unsigned char dbm_timer_flags;
+
+extern bool kowalski_wifi_wake_pm;
+
+extern void kowalski_wifi_register_dbm_cb(void*);
+extern void kowalski_wifi_unregister_dbm_cb(void);
+
+struct net_device *curr_dev;
+
+void kowalski_wifi_set_dbm_value(int dbm) {
+	printk("%s: setting txpower to %d dBm (%d qdbm)\n", __FUNCTION__, dbm, dbm*4);
+	if (dev_wlc_intvar_set(curr_dev, "qtxpower", (int)((dbm*4)-0.5))) {
+		printk("%s: cannot set txpower !\n", __FUNCTION__);
+	}
+}
+
+/*
+ static struct workqueue_struct *dbm_queue;
+ 
+ typedef struct {
+ struct delayed_work work;
+ struct net_device *dev;
+ int dbm;
+ } dbm_work_struct;
+ 
+ static dbm_work_struct *dbm_check;
+ 
+ int dbm2mwatt(int in)
+ {
+ int ip = in / 10;
+ int fp = in % 10;
+ int k;
+ double res = 1.0;
+ 
+ for(k = 0; k < ip; k++)
+ res *= 10;
+ for(k = 0; k < fp; k++)
+ res *= LOG10_MAGIC;
+ 
+ return((int) res);
+ }
+ 
+ void start_dbm_timer(void) {
+ if (dbm_check && (!(dbm_timer_flags & DBM_TIMER_RUNNING))) {
+ queue_delayed_work_on(0, dbm_queue, (struct delayed_work*)dbm_check, 5*HZ);
+ dbm_timer_flags |= DBM_TIMER_RUNNING;
+ }
+ }
+ 
+ void pause_dbm_timer(void) {
+ if (dbm_check && (dbm_timer_flags & DBM_TIMER_RUNNING)) {
+ cancel_delayed_work_sync((struct delayed_work*)dbm_check);
+ dbm_timer_flags &= ~DBM_TIMER_RUNNING;
+ }
+ }
+ 
+ void stop_dbm_timer(void) {
+ pause_dbm_timer();
+ if (dbm_queue) {
+ flush_workqueue(dbm_queue);
+ destroy_workqueue(dbm_queue);
+ }
+ }
+ 
+ static void dbm_timer_work_fn(struct work_struct *work) {
+ dbm_work_struct *check = (dbm_work_struct*)work;
+ struct net_device *dev = check->dev;
+ int curr_dbm = check->dbm;
+ 
+ printk("%s: current dbm value is %d, kowalski_wifi_dbm is %d\n", __FUNCTION__, curr_dbm, kowalski_wifi_dbm);
+ 
+ mutex_lock(&dbm_mutex);
+ 
+ if (kowalski_wifi_dbm != curr_dbm) {
+ if (dev_wlc_intvar_set(dev, "qtxpower", bcm_qdbm_to_mw((kowalski_wifi_dbm * 4)-0.5))) {
+ printk("%s: cannot set txpower !\n", __FUNCTION__);
+ } else {
+ check->dbm = kowalski_wifi_dbm;
+ }
+ }
+ 
+ queue_delayed_work_on(0, dbm_queue, (struct delayed_work*) check, 5*HZ);
+ 
+ mutex_unlock(&dbm_mutex);
+ }
+ */
+#else
+#define DEFAULT_DBM 19
+static int kowalski_wifi_dbm = DEFAULT_DBM;
+#endif
 
 #if WIRELESS_EXT > 12
 static int
@@ -1772,9 +1867,11 @@ wl_control_wl_start(struct net_device *dev)
 /* LGE_CHANGE_E, [yoohoo@lge.com], 2009-11-19, Use deepsleep instead of dhd_dev_reset when driver start or stop */
 		g_onoff = G_WLAN_SET_ON;
 	}
+
 	WL_ERROR(("Exited %s \n", __FUNCTION__));
 
 	dhd_os_start_unlock(iw->pub);
+
 	return ret;
 }
 static int
@@ -4124,6 +4221,16 @@ wl_iw_iscan_set_scan(
 	}
 #endif 
 
+#ifdef CONFIG_KOWALSKI_WIFI_PM &&
+	if (g_first_counter_scans == 1) {
+		if (curr_dev != dev)
+			curr_dev = dev;
+
+		kowalski_wifi_set_dbm_value(kowalski_wifi_dbm);
+		kowalski_wifi_register_dbm_cb(kowalski_wifi_set_dbm_value);
+	}
+#endif
+	
 #if defined(CONFIG_FIRST_SCAN) && !defined(CSCAN)
 	if (g_first_broadcast_scan < BROADCAST_SCAN_FIRST_RESULT_CONSUMED) {
 		if (++g_first_counter_scans == MAX_ALLOWED_BLOCK_SCAN_FROM_FIRST_SCAN) {
@@ -7851,107 +7958,6 @@ int wl_iw_process_private_ascii_cmd(
 }
 #endif 
 
-#ifdef CONFIG_KOWALSKI_WIFI_PM
-
-// #define DBM_TIMER_RUNNING (1 << 0)
-
-	// static struct mutex dbm_mutex;
-	// static unsigned char dbm_timer_flags;
-
-	extern bool kowalski_wifi_wake_pm;
-
-	extern void kowalski_wifi_register_dbm_cb(void*);
-	extern void kowalski_wifi_unregister_dbm_cb(void);
-
-	struct net_device *curr_dev;
-
-	int dbm_to_mwatt(int dbm) {
-		return (int)(10^(dbm/10));
-	}
-
-	void kowalski_wifi_set_dbm_value(int dbm) {
-		// int mwatt = dbm_to_mwatt(dbm);
-		printk("%s: setting txpower to %d dBm (%d qdbm)\n", __FUNCTION__, dbm, dbm*4);
-		if (dev_wlc_intvar_set(curr_dev, "qtxpower", (dbm*4))) {
-			printk("%s: cannot set txpower !\n", __FUNCTION__);
-		}
-	}
-
-/*
-	static struct workqueue_struct *dbm_queue;
-
-	typedef struct {
-		struct delayed_work work;
-		struct net_device *dev;
-		int dbm;
-	} dbm_work_struct;
-
-	static dbm_work_struct *dbm_check;
-
-	int dbm2mwatt(int in)
-	{
-		int ip = in / 10;
-		int fp = in % 10;
-		int k;
-		double res = 1.0;
-
-		for(k = 0; k < ip; k++)
-			res *= 10;
-		for(k = 0; k < fp; k++)
-			res *= LOG10_MAGIC;
-
-		return((int) res);
-	}
-
-	void start_dbm_timer(void) {
-		if (dbm_check && (!(dbm_timer_flags & DBM_TIMER_RUNNING))) {
-			queue_delayed_work_on(0, dbm_queue, (struct delayed_work*)dbm_check, 5*HZ);
-			dbm_timer_flags |= DBM_TIMER_RUNNING;
-		}
-	}
-
-	void pause_dbm_timer(void) {
-		if (dbm_check && (dbm_timer_flags & DBM_TIMER_RUNNING)) {
-			cancel_delayed_work_sync((struct delayed_work*)dbm_check);
-			dbm_timer_flags &= ~DBM_TIMER_RUNNING;
-		}
-	}
-
-	void stop_dbm_timer(void) {
-		pause_dbm_timer();
-		if (dbm_queue) {
-			flush_workqueue(dbm_queue);
-			destroy_workqueue(dbm_queue);
-		}
-	}
-
-	static void dbm_timer_work_fn(struct work_struct *work) {
-		dbm_work_struct *check = (dbm_work_struct*)work;
-		struct net_device *dev = check->dev;
-		int curr_dbm = check->dbm;
-
-		printk("%s: current dbm value is %d, kowalski_wifi_dbm is %d\n", __FUNCTION__, curr_dbm, kowalski_wifi_dbm);
-
-		mutex_lock(&dbm_mutex);
-
-		if (kowalski_wifi_dbm != curr_dbm) {
-			if (dev_wlc_intvar_set(dev, "qtxpower", bcm_qdbm_to_mw(kowalski_wifi_dbm * 4))) {
-				printk("%s: cannot set txpower !\n", __FUNCTION__);
-			} else {
-				check->dbm = kowalski_wifi_dbm;
-			}
-		}
-
-		queue_delayed_work_on(0, dbm_queue, (struct delayed_work*) check, 5*HZ);
-
-		mutex_unlock(&dbm_mutex);
-	}
-*/
-#else
-	#define DEFAULT_DBM 19
-	static int kowalski_wifi_dbm = DEFAULT_DBM;
-#endif
-
 /* LGE_CHANGE_S [yoohoo@lge.com] 2009-05-14, support private command */
 #if defined(CONFIG_LGE_BCM432X_PATCH)
 static int
@@ -7987,17 +7993,6 @@ wl_iw_set_powermode(
 
 #ifdef CONFIG_KOWALSKI_WIFI_PM
 	/*
-	 * Let's hardcode a default of 79mW - 19dBm to be at least within EU regulations
-	 * The unmanaged firmware was setting the txpower to 1494mW - 32dBm. Insane.
-	 */
-	int mwatt = dbm_to_mwatt(kowalski_wifi_dbm);
-	if (dev_wlc_intvar_set(dev, "qtxpower", (kowalski_wifi_dbm*4))) {
-		printk("%s: cannot set txpower !\n", __FUNCTION__);
-	}
-
-	curr_dev = dev;
-	kowalski_wifi_register_dbm_cb(kowalski_wifi_set_dbm_value);
-/*
 	if (dbm_timer_flags & DBM_TIMER_RUNNING) {
 		if (dbm_check && dbm_check->dev != dev) {
 			stop_dbm_timer();
