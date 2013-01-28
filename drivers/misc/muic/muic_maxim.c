@@ -59,7 +59,7 @@ extern int muic_send_cable_type(TYPE_MUIC_MODE mode);
 extern int half_boot_enable;
 #endif
 
-#ifdef CONFIG_FORCE_FAST_CHARGE
+#ifdef CONFIG_KOWALSKI_FAST_CHARGE
 extern bool force_fast_charge; /* fast charge */
 #else
 bool force_fast_charge = false;
