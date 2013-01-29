@@ -256,7 +256,6 @@ asmlinkage void __cpuinit secondary_start_kernel(void)
 {
 	struct mm_struct *mm = &init_mm;
 	unsigned int cpu = smp_processor_id();
-	static bool booted = false;
 
 	printk("CPU%u: Booted secondary processor\n", cpu);
 
@@ -292,9 +291,7 @@ asmlinkage void __cpuinit secondary_start_kernel(void)
 	 */
 	percpu_timer_setup();
 
-	if (!booted)
-		calibrate_delay();
-	booted = true;
+	calibrate_delay();
 
 	smp_store_cpu_info(cpu);
 
