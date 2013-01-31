@@ -109,9 +109,7 @@ unsigned int muic_intr_gpio = TEGRA_GPIO_PU5;
 #endif
 
 #ifdef CONFIG_KOWALSKI_FAST_CHARGE
-extern bool force_fast_charge; /* fast charge */
-#else
-bool force_fast_charge = false;
+extern bool force_fast_charge;
 #endif
 
 const char *retain_mode_str[] = {
@@ -661,15 +659,17 @@ static void remove_lg_muic_proc_file(void)
 void check_charging_mode(void)
 {
 	s32 value;
+	value = i2c_smbus_read_byte_data(muic_client, INT_STAT);
 
 #ifdef CONFIG_KOWALSKI_FAST_CHARGE
-	if (force_fast_charge) {
+	printk("%s: forcing fast charge mode\n", __FUNCTION__);
+	if (force_fast_charge && (value & V_VBUS)) {
 		charging_mode = CHARGING_LG_TA;
-		return;
+	} else {
+		charging_mode = CHARGING_NONE;
 	}
+	return;
 #endif
-
-	value = i2c_smbus_read_byte_data(muic_client, INT_STAT);
 
 	if (value & V_VBUS) {
 		if ((value & IDNO) == IDNO_0010 ||

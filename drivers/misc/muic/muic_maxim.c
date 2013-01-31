@@ -201,6 +201,22 @@ void set_max14526_muic_mode(unsigned char int_stat_value)
 	
 	printk(KERN_WARNING "[MUIC] set_max14526_muic_mode, int_stat_value = 0x%02x \n", int_stat_value);
 
+#ifdef CONFIG_KOWALSKI_FAST_CHARGE
+	if (force_fast_charge) {
+		if (int_stat_value & V_VBUS) {
+			printk("%s: forcing fast charge mode\n", __FUNCTION__);
+			muic_i2c_write_byte(SW_CONTROL, COMP2_TO_HZ | COMN1_TO_HZ);
+			muic_i2c_write_byte(CONTROL_1,ID_200 | ADC_EN  | CP_EN );
+			charging_mode = CHARGING_LG_TA;
+			muic_mode = MUIC_LG_TA;
+		} else {
+			charging_mode = CHARGING_NONE;
+			muic_mode = MUIC_UNKNOWN;
+		}
+		return;
+	}
+#endif
+
 	//[gieseo.park@lge.com] - Cosmo MUIC detection code
 	if (int_stat_value & V_VBUS) {
 #if 0
@@ -256,7 +272,7 @@ void set_max14526_muic_mode(unsigned char int_stat_value)
 
 			muic_i2c_read_byte(STATUS, &reg_value);
 
-			if (reg_value & C1COMP || force_fast_charge) {
+			if (reg_value & C1COMP) {
 #if defined(CONFIG_MACH_STAR_P990) || defined(CONFIG_MACH_STAR_SU660) || defined(CONFIG_MACH_STAR_P999)
 				printk("[****MUIC****] Detect Charger C1COMP!!!!");
 					muic_i2c_write_byte(SW_CONTROL, COMP2_TO_HZ | COMN1_TO_HZ);
