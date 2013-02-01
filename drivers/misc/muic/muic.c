@@ -663,12 +663,14 @@ void check_charging_mode(void)
 
 #ifdef CONFIG_KOWALSKI_FAST_CHARGE
 	printk("%s: forcing fast charge mode\n", __FUNCTION__);
-	if (force_fast_charge && (value & V_VBUS)) {
-		charging_mode = CHARGING_LG_TA;
-	} else {
-		charging_mode = CHARGING_NONE;
+	if (force_fast_charge) {
+		if (value & V_VBUS) {
+			charging_mode = CHARGING_LG_TA;
+		} else {
+			charging_mode = CHARGING_NONE;
+		}
+		return;
 	}
-	return;
 #endif
 
 	if (value & V_VBUS) {
