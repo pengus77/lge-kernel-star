@@ -162,7 +162,11 @@ static struct embedded_sdio_data embedded_sdio_data1 = {
 		.multi_block    = 1,
 		.low_speed      = 0,
 		.wide_bus       = 0,
-		.high_power     = 1,
+#ifdef CONFIG_KOWALSKI_WIFI_PM
+		.high_power     = 0,
+#else
+		.high_power		= 1,
+#endif
 		.high_speed     = 1,
 	},
 	.cis  = {
