@@ -1765,7 +1765,7 @@ wl_iw_get_rssi(
 /* BEGIN: 0005568 mingi.sung@lge.com 2010-03-27 */
 /* MOD 0005568: [WLAN] Wi-Fi will be disconnected if the RSSI value is lower than -92 */
 #if defined(CONFIG_LGE_BCM432X_PATCH)
-	if( rssi < -92 ){
+	if( rssi < -86 ){
 		less_than_rssi ++;
 	}else{
 		if( less_than_rssi != 0)
