@@ -35,7 +35,7 @@
 
 #ifdef CONFIG_KOWALSKI_OC
 #include "../dvfs.h"
-int *UV_mV_Ptr; /* Stored voltage table from cpufreq sysfs */
+int *UV_mV_Ptr;
 extern struct dvfs *cpu_dvfs;
 #endif
 
@@ -685,21 +685,6 @@ static ssize_t show_bios_limit(struct cpufreq_policy *policy, char *buf)
 }
 
 #ifdef CONFIG_KOWALSKI_OC
-static ssize_t show_frequency_voltage_table(struct cpufreq_policy *policy, char *buf)
-{
-	int i = 0;
-	char *table = buf;
-
-	if (cpu_dvfs == NULL)
-		return sprintf(buf, "INIT\n");
-
-	for (i = cpu_dvfs->num_freqs-1; i >= 0; i--)
-		table += sprintf(table, "%li %d %d\n", cpu_dvfs->freqs[i]/1000,
-				cpu_dvfs->millivolts[i], cpu_dvfs->millivolts[i] - UV_mV_Ptr[i]);
-
-	return table - buf;
-}
-
 static ssize_t show_UV_mV_table(struct cpufreq_policy *policy, char *buf)
 {
 	int i;
@@ -709,7 +694,7 @@ static ssize_t show_UV_mV_table(struct cpufreq_policy *policy, char *buf)
 		return sprintf(buf, "INIT\n");
 
 	for (i = cpu_dvfs->num_freqs - 1; i >= 0; i--) {
-		table += sprintf(table, "%d ", UV_mV_Ptr[i]);
+		table += sprintf(table, "%limhz: %d mV\n", cpu_dvfs->freqs[i]/1000000, cpu_dvfs->millivolts[i] - UV_mV_Ptr[i]);
 	}
 	table += sprintf(table, "\n");
 	return table - buf;
@@ -718,15 +703,16 @@ static ssize_t show_UV_mV_table(struct cpufreq_policy *policy, char *buf)
 static ssize_t store_UV_mV_table(struct cpufreq_policy *policy, const char *buf, size_t count)
 {
 	char *p = buf, *k;
-        int i = cpu_dvfs->num_freqs - 1;
+	long uv;
+	int i = cpu_dvfs->num_freqs - 1;
 
 	while (i >= 0) {
 		k = strsep(&p, " ");
 		if (k == NULL)
 			break;
 		if (strlen(k) > 0) {
-			UV_mV_Ptr[i] = simple_strtol(k, NULL, 10);
-			pr_info("UV_mV[%d] = %d\n", i, UV_mV_Ptr[i]);
+			uv = simple_strtol(k, NULL, 10);
+			UV_mV_Ptr[i] = cpu_dvfs->millivolts[i] - uv;
 			i--;
 		}
 	}
@@ -756,7 +742,6 @@ cpufreq_freq_attr_ro(policy_min_freq);
 cpufreq_freq_attr_ro(policy_max_freq);
 
 #ifdef CONFIG_KOWALSKI_OC
-cpufreq_freq_attr_ro(frequency_voltage_table);
 cpufreq_freq_attr_rw(UV_mV_table);
 #endif
 
@@ -776,7 +761,6 @@ static struct attribute *default_attrs[] = {
 	&policy_max_freq.attr,
 
 #ifdef CONFIG_KOWALSKI_OC
-	&frequency_voltage_table.attr,
 	&UV_mV_table.attr,
 #endif
 	NULL
@@ -2121,7 +2105,6 @@ static int __init cpufreq_core_init(void)
 	int rc;
 
 #ifdef CONFIG_KOWALSKI_OC
-	/* Allocate some memory for the voltage tab */
 	UV_mV_Ptr = kzalloc(sizeof(int)*(MAX_DVFS_FREQS), GFP_KERNEL);
 #endif
 

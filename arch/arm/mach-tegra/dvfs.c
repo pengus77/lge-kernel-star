@@ -361,10 +361,10 @@ __tegra_dvfs_set_rate(struct dvfs *d, unsigned long rate)
 			return -EINVAL;
 		}
 #ifdef CONFIG_KOWALSKI_OC
-                if (UV_mV_Ptr)
-                       d->cur_millivolts = d->millivolts[i] - UV_mV_Ptr[i];
-                else
-                       d->cur_millivolts = d->millivolts[i];
+		if (UV_mV_Ptr)
+			d->cur_millivolts = d->millivolts[i] - UV_mV_Ptr[i];
+		else
+			d->cur_millivolts = d->millivolts[i];
 #else
 		d->cur_millivolts = d->millivolts[i];
 #endif
