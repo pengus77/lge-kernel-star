@@ -565,6 +565,9 @@ static void dhd_set_packet_filter(int value, dhd_pub_t *dhd)
 extern bool kowalski_wifi_max_pm;
 extern bool kowalski_wifi_wake_pm;
 extern bool kowalski_wifi_hotspot_pm;
+
+extern void kowalski_wifi_unregister_dbm_cb();
+
 /*
 extern void start_dbm_timer(void);
 extern void pause_dbm_timer(void);
@@ -2657,8 +2660,6 @@ dhd_bus_detach(dhd_pub_t *dhdp)
 	}
 }
 
-extern void kowalski_wifi_unregister_dbm_cb();
-
 void
 dhd_detach(dhd_pub_t *dhdp)
 {
@@ -2674,8 +2675,8 @@ dhd_detach(dhd_pub_t *dhdp)
 
 #ifdef CONFIG_KOWALSKI_WIFI_PM
 			// stop_dbm_timer();
+			printk("%s: unregistering kowalski_wifi callbacks\n", __FUNCTION__);
 			kowalski_wifi_unregister_dbm_cb();
-			
 #endif
 
 #if defined(CONFIG_HAS_EARLYSUSPEND)

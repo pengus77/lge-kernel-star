@@ -64,6 +64,9 @@ typedef const struct si_pub  si_t;
 #include <linux/sched.h>
 
 extern int kowalski_wifi_dbm;
+extern bool kowalski_wifi_wake_pm;
+
+extern void kowalski_wifi_register_dbm_cb(void*);
 #endif
 
 #define JF2MS ((((jiffies / HZ) * 1000) + ((jiffies % HZ) * 1000) / HZ))
@@ -608,11 +611,6 @@ dev_wlc_intvar_get(
 // static struct mutex dbm_mutex;
 // static unsigned char dbm_timer_flags;
 
-extern bool kowalski_wifi_wake_pm;
-
-extern void kowalski_wifi_register_dbm_cb(void*);
-extern void kowalski_wifi_unregister_dbm_cb(void);
-
 struct net_device *curr_dev;
 
 void kowalski_wifi_set_dbm_value(int dbm) {
@@ -620,6 +618,7 @@ void kowalski_wifi_set_dbm_value(int dbm) {
 	if (dev_wlc_intvar_set(curr_dev, "qtxpower", (int)((dbm*4)-0.5))) {
 		printk("%s: cannot set txpower !\n", __FUNCTION__);
 	}
+	kowalski_wifi_dbm = dbm;
 }
 
 /*
@@ -1872,6 +1871,17 @@ wl_control_wl_start(struct net_device *dev)
 
 	dhd_os_start_unlock(iw->pub);
 
+#ifdef CONFIG_KOWALSKI_WIFI_PM
+	if (curr_dev != dev) {
+		curr_dev = dev;
+
+		printk("%s: registering kowalski callbacks\n", __FUNCTION__);
+
+		kowalski_wifi_set_dbm_value(kowalski_wifi_dbm);
+		kowalski_wifi_register_dbm_cb(kowalski_wifi_set_dbm_value);
+	}
+#endif //CONFIG_KOWALSKI_WIFI_PM
+	
 	return ret;
 }
 static int
@@ -1889,7 +1899,7 @@ wl_iw_control_wl_off(
 		WL_ERROR(("%s: dev is null\n", __FUNCTION__));
 		return -1;
 	}
-
+	
 	iw = *(wl_iw_t **)netdev_priv(dev);
 	if (!iw) {
 		WL_ERROR(("%s: dev is null\n", __FUNCTION__));
@@ -2025,6 +2035,7 @@ wl_iw_control_wl_on(
 	WL_TRACE(("%s : call net_os_set_suspend(resuming) \n", __FUNCTION__));
 	net_os_set_suspend(dev, 0);
 //20110926 fmcine@lge.com, fixed reconnection issue when wakeup [END]
+
 	WL_TRACE(("Exited %s \n", __FUNCTION__));
 
 	return ret;
@@ -4219,18 +4230,8 @@ wl_iw_iscan_set_scan(
 			}
 		}
 	}
-#endif 
-
-#ifdef CONFIG_KOWALSKI_WIFI_PM
-	if (g_first_counter_scans == 1) {
-		if (curr_dev != dev)
-			curr_dev = dev;
-
-		kowalski_wifi_set_dbm_value(kowalski_wifi_dbm);
-		kowalski_wifi_register_dbm_cb(kowalski_wifi_set_dbm_value);
-	}
 #endif
-	
+
 #if defined(CONFIG_FIRST_SCAN) && !defined(CSCAN)
 	if (g_first_broadcast_scan < BROADCAST_SCAN_FIRST_RESULT_CONSUMED) {
 		if (++g_first_counter_scans == MAX_ALLOWED_BLOCK_SCAN_FROM_FIRST_SCAN) {
@@ -5268,7 +5269,7 @@ wl_iw_set_txpow(
 
 #ifdef CONFIG_KOWALSKI_WIFI_PM
 	kowalski_wifi_dbm = (int)(bcm_mw_to_qdbm(txpwrmw) / 4);
-	printk("%s: setting kowalski_wifi_dbm to %d from txpwrmw %d\n", __FUNCTION__, kowalski_wifi_dbm, txpwrmw);
+	kowalski_wifi_set_dbm_value(kowalski_wifi_dbm);
 #endif
 
 	error = dev_wlc_intvar_set(dev, "qtxpower", (int)(bcm_mw_to_qdbm(txpwrmw)));
@@ -9535,10 +9536,8 @@ int wl_iw_attach(struct net_device *dev, void * dhdp)
 	if (!dev)
 		return 0;
 
-	
 	memset(&g_wl_iw_params, 0, sizeof(wl_iw_extra_params_t));
 
-	
 #ifdef CSCAN
 	params_size = (WL_SCAN_PARAMS_FIXED_SIZE + OFFSETOF(wl_iscan_params_t, params)) +
 	    (WL_NUMCHANNELS * sizeof(uint16)) + WL_SCAN_PARAMS_SSID_MAX * sizeof(wlc_ssid_t);
@@ -9577,7 +9576,7 @@ int wl_iw_attach(struct net_device *dev, void * dhdp)
 	init_timer(&iscan->timer);
 	iscan->timer.data = (ulong)iscan;
 	iscan->timer.function = wl_iw_timerfunc;
-
+	
 #if 0
 	sema_init(&iscan->sysioc_sem, 0);
 	init_completion(&iscan->sysioc_exited);
@@ -9599,8 +9598,6 @@ int wl_iw_attach(struct net_device *dev, void * dhdp)
 	MUTEX_LOCK_SOFTAP_SET_INIT(iw->pub);
 #endif 
 	g_scan = NULL;
-
-	
 	g_scan = (void *)kmalloc(G_SCAN_RESULTS, GFP_KERNEL);
 	if (!g_scan)
 		return -ENOMEM;
@@ -9615,7 +9612,6 @@ int wl_iw_attach(struct net_device *dev, void * dhdp)
 	
 	wl_iw_bt_init(dev);
 
-
 	return 0;
 }
 
@@ -9627,6 +9623,7 @@ void wl_iw_detach(void)
 
 	if (!iscan)
 		return;
+
 #if 0
 	if (iscan->sysioc_pid >= 0) {
 		KILL_PROC(iscan->sysioc_pid, SIGTERM);
