@@ -54,14 +54,25 @@ static int star_wakeup_key(void);
 		.wakeup = _iswake,		\
 		.debounce_interval = 10,	\
 	}
+// HONGIK JE.PARK HOME KEY remove
+#if defined(CONFIG_MACH_STAR_P990) || defined(CONFIG_MACH_STAR_P999)
 static struct gpio_keys_button star_keys[] = {    
-#if defined(CONFIG_MACH_STAR_SU660)
-	GPIO_KEY(KEY_HOME, PV6, 1),
-#endif	
-	GPIO_KEY(KEY_VOLUMEDOWN, PG0, 0),
-	GPIO_KEY(KEY_VOLUMEUP, PG1, 0),
-	GPIO_KEY(KEY_POWER, PV2, 1),
+	[0] = GPIO_KEY(KEY_VOLUMEDOWN, PG0, 0),
+	[1] = GPIO_KEY(KEY_VOLUMEUP, PG1, 0),
+	[2] = GPIO_KEY(KEY_POWER, PV2, 1),	
 };
+#else
+static struct gpio_keys_button star_keys[] = {    
+#if defined(CONFIG_MACH_STAR_REV_D)    
+	[0] = GPIO_KEY(KEY_HOME, PK6, 0),
+#else	
+	[0] = GPIO_KEY(KEY_HOME, PV6, 1),   
+#endif	
+	[1] = GPIO_KEY(KEY_VOLUMEDOWN, PG0, 0),
+	[2] = GPIO_KEY(KEY_VOLUMEUP, PG1, 0),
+	[3] = GPIO_KEY(KEY_POWER, PV2, 1),	
+};
+#endif
 
 static struct gpio_keys_platform_data star_keys_platform_data = {
    .buttons  = star_keys,
