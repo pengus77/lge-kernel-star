@@ -33,6 +33,12 @@
 
 #include <trace/events/power.h>
 
+#ifdef CONFIG_KOWALSKI_OC
+#include "../dvfs.h"
+int *UV_mV_Ptr;
+extern struct dvfs *cpu_dvfs;
+#endif
+
 #define dprintk(msg...) cpufreq_debug_printk(CPUFREQ_DEBUG_CORE, \
 						"cpufreq-core", msg)
 
@@ -678,6 +684,46 @@ static ssize_t show_bios_limit(struct cpufreq_policy *policy, char *buf)
 	return sprintf(buf, "%u\n", policy->cpuinfo.max_freq);
 }
 
+#ifdef CONFIG_KOWALSKI_OC
+static ssize_t show_UV_mV_table(struct cpufreq_policy *policy, char *buf)
+{
+	int i;
+	char *table = buf;
+
+	if (cpu_dvfs == NULL)
+		return sprintf(buf, "INIT\n");
+
+	for (i = cpu_dvfs->num_freqs - 1; i >= 0; i--) {
+		table += sprintf(table, "%limhz: %d mV\n", cpu_dvfs->freqs[i]/1000000, cpu_dvfs->millivolts[i] - UV_mV_Ptr[i]);
+	}
+	table += sprintf(table, "\n");
+	return table - buf;
+}
+
+static ssize_t store_UV_mV_table(struct cpufreq_policy *policy, const char *buf, size_t count)
+{
+	char *p = buf, *k;
+	long uv;
+	int i = cpu_dvfs->num_freqs - 1;
+
+	while (i >= 0) {
+		k = strsep(&p, " ");
+		if (k == NULL)
+			break;
+		if (strlen(k) > 0) {
+			uv = simple_strtol(k, NULL, 10);
+			UV_mV_Ptr[i] = cpu_dvfs->millivolts[i] - uv;
+			i--;
+		}
+	}
+
+	if (i == cpu_dvfs->num_freqs - 1)
+		return -EINVAL;
+
+	return count;
+}
+#endif
+
 cpufreq_freq_attr_ro_perm(cpuinfo_cur_freq, 0400);
 cpufreq_freq_attr_ro(cpuinfo_min_freq);
 cpufreq_freq_attr_ro(cpuinfo_max_freq);
@@ -695,6 +741,10 @@ cpufreq_freq_attr_rw(scaling_setspeed);
 cpufreq_freq_attr_ro(policy_min_freq);
 cpufreq_freq_attr_ro(policy_max_freq);
 
+#ifdef CONFIG_KOWALSKI_OC
+cpufreq_freq_attr_rw(UV_mV_table);
+#endif
+
 static struct attribute *default_attrs[] = {
 	&cpuinfo_min_freq.attr,
 	&cpuinfo_max_freq.attr,
@@ -709,6 +759,10 @@ static struct attribute *default_attrs[] = {
 	&scaling_setspeed.attr,
 	&policy_min_freq.attr,
 	&policy_max_freq.attr,
+
+#ifdef CONFIG_KOWALSKI_OC
+	&UV_mV_table.attr,
+#endif
 	NULL
 };
 
@@ -2049,6 +2103,10 @@ static int __init cpufreq_core_init(void)
 {
 	int cpu;
 	int rc;
+
+#ifdef CONFIG_KOWALSKI_OC
+	UV_mV_Ptr = kzalloc(sizeof(int)*(MAX_DVFS_FREQS), GFP_KERNEL);
+#endif
 
 	for_each_possible_cpu(cpu) {
 		per_cpu(cpufreq_policy_cpu, cpu) = -1;

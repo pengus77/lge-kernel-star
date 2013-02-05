@@ -89,4 +89,5 @@ obj-$(CONFIG_STAR_VIBRATOR)		+= vibrator.o
 obj-$(CONFIG_TSPDRV)        += tspdrv/
 #110618 taehyun.lim@lge.com Porting Immversion Vib[E]
 obj-$(CONFIG_STAR_HALL)		+= bu52031nvx.o
+obj-$(CONFIG_KOWALSKI)		+= kowalski/
 

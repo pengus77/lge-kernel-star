@@ -1,0 +1,30 @@
+#
+# Kowalski Kernel Optimizations
+#
+
+menuconfig KOWALSKI
+	bool "Kowalski Kernel Optimizations"
+	depends on EXPERIMENTAL
+	default yes
+	help
+	  This option enables support for specific Kowalski
+	  Kernel Optimizations.
+
+if KOWALSKI
+
+config KOWALSKI_FAST_CHARGE
+	bool "Simulate AC charging mode on USB"
+	default n
+	help
+	  A simple sysfs interface to force adapters that
+	  are detected as USB to charge as AC.
+
+config KOWALSKI_WIFI_PM
+	bool "Enable WiFi Extended Power Management"
+	default y
+	help
+	  This will enable a set of sysfs entries allowing
+	  the configuration of the wifi pm modes from user
+	  space.
+
+endif # KOWALSKI

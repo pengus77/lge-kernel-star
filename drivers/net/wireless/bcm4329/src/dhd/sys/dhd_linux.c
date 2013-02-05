@@ -561,14 +561,19 @@ static void dhd_set_packet_filter(int value, dhd_pub_t *dhd)
 #endif
 }
 
-bool max_pm=false;
-module_param(max_pm, bool, 0755);
+#ifdef CONFIG_KOWALSKI_WIFI_PM
+extern bool kowalski_wifi_max_pm;
+extern bool kowalski_wifi_wake_pm;
+extern bool kowalski_wifi_hotspot_pm;
 
-bool wake_pm=true;
-module_param(wake_pm, bool, 0755);
+extern void kowalski_wifi_unregister_dbm_cb();
 
-bool hotspot_pm=false;
-module_param(hotspot_pm, bool, 0755);
+/*
+extern void start_dbm_timer(void);
+extern void pause_dbm_timer(void);
+extern void stop_dbm_timer(void);
+*/
+#endif
 
 #if defined(CONFIG_HAS_EARLYSUSPEND)
 #if defined(CONFIG_BRCM_LGE_WL_ARPOFFLOAD)	/*Setting dtim.	20110120*/
@@ -576,9 +581,9 @@ extern uint wl_dtim_val;
 #endif
 static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 {
-	int power_mode = -1;
+	int power_mode = PM_OFF;
 	char iovbuf[32];
-	int bcn_li_dtim = 0;
+	int bcn_li_dtim = 3;
 
 	if (dhd && dhd->up) {
 		if (value && dhd->in_suspend) {
@@ -588,7 +593,8 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 			}
 			else
 			{
-				if (max_pm) {
+#ifdef CONFIG_KOWALSKI_WIFI_PM
+				if (kowalski_wifi_max_pm) {
 					power_mode = PM_MAX;
 					printk("%s: suspending in PM_MAX mode\n", __FUNCTION__);
 				} else {
@@ -596,14 +602,15 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 					printk("%s: suspending in PM_FAST mode\n", __FUNCTION__);
 				}
 
+				// pause_dbm_timer();
+#endif
 				/* Kernel suspended */
 				dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM,
 					(char *)&power_mode, sizeof(power_mode));
 
 				/* Enable packet filter, only allow unicast packet to send up */
 				dhd_set_packet_filter(1, dhd);
-				
-				bcn_li_dtim = dhd_get_dtim_skip(dhd);
+
 				bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim,
 					4, iovbuf, sizeof(iovbuf));
 				dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
@@ -617,10 +624,13 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 			}
 			else
 			{
-				power_mode = PM_FAST;
-				if (!wake_pm && !max_pm)
-					power_mode = PM_OFF;
+#ifdef CONFIG_KOWALSKI_WIFI_PM
+				power_mode = PM_OFF;
+				if (kowalski_wifi_wake_pm)
+					power_mode = PM_FAST;
 
+				// start_dbm_timer();
+#endif
 				dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM, (char *)&power_mode,
 					sizeof(power_mode));
 
@@ -1013,11 +1023,11 @@ dhd_op_if(dhd_if_t *ifp)
 				ifp->state = 0;
 			}
 
-#if defined(CONFIG_LGE_BCM432X_PATCH)
+#if defined(CONFIG_LGE_BCM432X_PATCH) && defined(CONFIG_KOWALSKI_WIFI_PM)
 			if(ap_priv_running == TRUE)
 			{
 				int power_mode = PM_OFF;
-				if (hotspot_pm)
+				if (kowalski_wifi_hotspot_pm)
 					power_mode = PM_FAST;
 
 				dhdcdc_set_ioctl(&dhd->pub, 0, WLC_SET_PM,
@@ -2662,6 +2672,12 @@ dhd_detach(dhd_pub_t *dhdp)
 		if (dhd) {
 			dhd_if_t *ifp;
 			int i;
+
+#ifdef CONFIG_KOWALSKI_WIFI_PM
+			// stop_dbm_timer();
+			printk("%s: unregistering kowalski_wifi callbacks\n", __FUNCTION__);
+			kowalski_wifi_unregister_dbm_cb();
+#endif
 
 #if defined(CONFIG_HAS_EARLYSUSPEND)
 		if (dhd->early_suspend.suspend)
