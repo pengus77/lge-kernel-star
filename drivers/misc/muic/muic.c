@@ -108,10 +108,6 @@ unsigned int muic_intr_gpio = TEGRA_GPIO_PU5;
 
 #endif
 
-#ifdef CONFIG_KOWALSKI_FAST_CHARGE
-extern bool force_fast_charge;
-#endif
-
 const char *retain_mode_str[] = {
 	"RETAIN_NO",
 	"RETAIN_AP_USB",
@@ -661,18 +657,6 @@ void check_charging_mode(void)
 	s32 value;
 	value = i2c_smbus_read_byte_data(muic_client, INT_STAT);
 
-#ifdef CONFIG_KOWALSKI_FAST_CHARGE
-	printk("%s: forcing fast charge mode\n", __FUNCTION__);
-	if (force_fast_charge) {
-		if (value & V_VBUS) {
-			charging_mode = CHARGING_LG_TA;
-		} else {
-			charging_mode = CHARGING_NONE;
-		}
-		return;
-	}
-#endif
-
 	if (value & V_VBUS) {
 		if ((value & IDNO) == IDNO_0010 ||
 		    (value & IDNO) == IDNO_0100 ||
@@ -1109,18 +1093,20 @@ s32 muic_unknown_detect_accessory(s32 x)
 
 static void muic_detect_device(void)
 {
-	s32 ret;
-
 	DBG("[MUIC] muic_detect_device()\n");
 
-	ret = muic_i2c_read_byte(DEVICE_ID, &muic_device);
+#if defined (CONFIG_MACH_STAR_P990) && defined(CONFIG_CM_BOOTLOADER_COMPAT)
+	/* pengus77: force charger detection on old boot loader */
+	muic_device = MAX14526;
+#else
+	s32 ret = muic_i2c_read_byte(DEVICE_ID, &muic_device);
 	if ((muic_device & 0xf0) == TS5USBA33402)
 		muic_device = TS5USBA33402;
 	else if ((muic_device & 0xf0) == MAX14526)
 		muic_device = MAX14526;
 	else if ((muic_device & 0xf0) == ANY_VENDOR)
 		muic_device = ANY_VENDOR;
-
+#endif
 	if (muic_device == TS5USBA33402) {
 		muic_init_device = muic_init_ts5usba33402;
 		muic_detect_accessory = muic_ts5usba33402_detect_accessory;
