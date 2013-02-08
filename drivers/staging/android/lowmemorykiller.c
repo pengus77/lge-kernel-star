@@ -99,7 +99,6 @@ void tune_lmk_zone_param(struct zonelist *zonelist, int classzone_idx,
 
 void tune_lmk_param(int *other_free, int *other_file, gfp_t gfp_mask)
 {
-	gfp_t gfp_mask;
 	struct zone *preferred_zone;
 	struct zonelist *zonelist;
 	enum zone_type high_zoneidx, classzone_idx;
@@ -181,7 +180,7 @@ static int lowmem_shrink(struct shrinker *s, int nr_to_scan, gfp_t gfp_mask)
 		}
 	}
 	if (nr_to_scan > 0)
-		lowmem_print(3, "lowmem_shrink %lu, %x, ofree %d %d, ma %d\n",
+		lowmem_print(3, "lowmem_shrink %d, %x, ofree %d %d, ma %d\n",
 				nr_to_scan, gfp_mask, other_free,
 				other_file, min_score_adj);
 	rem = global_page_state(NR_ACTIVE_ANON) +
@@ -189,7 +188,7 @@ static int lowmem_shrink(struct shrinker *s, int nr_to_scan, gfp_t gfp_mask)
 		global_page_state(NR_INACTIVE_ANON) +
 		global_page_state(NR_INACTIVE_FILE);
 	if (nr_to_scan <= 0 || min_score_adj == OOM_SCORE_ADJ_MAX + 1) {
-		lowmem_print(5, "lowmem_shrink %lu, %x, return %d\n",
+		lowmem_print(5, "lowmem_shrink %d, %x, return %d\n",
 			     nr_to_scan, gfp_mask, rem);
 
 		if (nr_to_scan > 0)
@@ -253,7 +252,7 @@ static int lowmem_shrink(struct shrinker *s, int nr_to_scan, gfp_t gfp_mask)
 		/* give the system time to free up the memory */
 		msleep_interruptible(20);
 	}
-	lowmem_print(4, "lowmem_shrink %lu, %x, return %d\n",
+	lowmem_print(4, "lowmem_shrink %d, %x, return %d\n",
 		     nr_to_scan, gfp_mask, rem);
 	rcu_read_unlock();
 	mutex_unlock(&scan_mutex);
