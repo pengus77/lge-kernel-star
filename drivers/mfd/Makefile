@@ -95,7 +95,7 @@ obj-$(CONFIG_GPADC_TPS80031)	+= tps8003x-gpadc.o
 obj-$(CONFIG_MFD_MAX8907C)	+= max8907c.o
 obj-$(CONFIG_MFD_MAX8907C)	+= max8907c-adc.o
 #MBksjung 2012.04.24: remove for battery rtc
-#obj-$(CONFIG_MFD_MAX8907C)	+= max8907c-rtc.o
+obj-$(CONFIG_MFD_MAX8907C)	+= max8907c-rtc.o
 obj-$(CONFIG_MFD_MAX8907C)	+= max8907c-irq.o
 obj-$(CONFIG_MFD_MAX77663)	+= max77663-core.o
 obj-$(CONFIG_MFD_AAT2870_CORE)	+= aat2870-core.o
