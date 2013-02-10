@@ -1102,7 +1102,6 @@ out:
 static void tegra2_periph_clk_disable(struct clk *c)
 {
 	unsigned long flags;
-	unsigned long val;
 
 	pr_debug("%s on clock %s\n", __func__, c->name);
 
@@ -1119,7 +1118,7 @@ static void tegra2_periph_clk_disable(struct clk *c)
 		 * flush the write operation in apb bus. This will avoid the
 		 * peripheral access after disabling clock*/
 		if (c->flags & PERIPH_ON_APB)
-			val = chipid_readl();
+			chipid_readl();
 
 		clk_writel(PERIPH_CLK_TO_ENB_BIT(c),
 			CLK_OUT_ENB_CLR + PERIPH_CLK_TO_ENB_SET_REG(c));
@@ -1131,7 +1130,6 @@ static void tegra2_periph_clk_disable(struct clk *c)
 static void tegra2_periph_clk_reset(struct clk *c, bool assert)
 {
 	unsigned long base = assert ? RST_DEVICES_SET : RST_DEVICES_CLR;
-	unsigned long val;
 
 	pr_debug("%s %s on clock %s\n", __func__,
 		 assert ? "assert" : "deassert", c->name);
@@ -1143,7 +1141,7 @@ static void tegra2_periph_clk_reset(struct clk *c, bool assert)
 		 * flush the write operation in apb bus. This will avoid the
 		 * peripheral access after disabling clock*/
 		if (c->flags & PERIPH_ON_APB)
-			val = chipid_readl();
+			chipid_readl();
 
 		clk_writel(PERIPH_CLK_TO_ENB_BIT(c),
 			   base + PERIPH_CLK_TO_ENB_SET_REG(c));
@@ -1993,10 +1991,10 @@ static struct clk_pll_freq_table tegra_pll_x_freq_table[] = {
 	{ 26000000, 1200000000, 600,  13, 1, 12},
 
 	/* 1.1 GHz */
-        { 12000000, 1100000000, 550, 6, 1, 12},
-        { 13000000, 1100000000, 770, 10, 1, 12},
-        { 19200000, 1100000000, 630, 12, 1, 8},
-        { 26000000, 1100000000, 550, 13, 1, 12},
+	{ 12000000, 1100000000, 550, 6, 1, 12},
+	{ 13000000, 1100000000, 770, 10, 1, 12},
+	{ 19200000, 1100000000, 630, 12, 1, 8},
+	{ 26000000, 1100000000, 550, 13, 1, 12},
 
 	/* 1 GHz */
 	{ 12000000, 1000000000, 1000, 12, 1, 12},
@@ -2250,7 +2248,7 @@ static struct clk tegra_clk_hclk = {
 	.reg		= 0x30,
 	.reg_shift	= 4,
 	.ops		= &tegra_bus_ops,
-	.max_rate       = 240000000,
+	.max_rate	= 240000000,
 	.min_rate	= 36000000,
 };
 
@@ -2261,8 +2259,7 @@ static struct clk tegra_clk_pclk = {
 	.reg		= 0x30,
 	.reg_shift	= 0,
 	.ops		= &tegra_bus_ops,
-	//.max_rate       = 140000000, /* was 120000000 */
-	.max_rate       = 120000000,
+	.max_rate	= 120000000,
 	.min_rate	= 36000000,
 };
 
@@ -2815,18 +2812,12 @@ struct tegra_cpufreq_table_data *tegra_cpufreq_table_get(void)
 unsigned long tegra_emc_to_cpu_ratio(unsigned long cpu_rate)
 {
 	/* Vote on memory bus frequency based on cpu frequency */
-	if (cpu_rate > 1000000000)
-		return 760000000;
-	else if (cpu_rate >= 816000)
+	if (cpu_rate >= 816000)
 		return 600000000;	/* cpu 816 MHz, emc max */
-	else if (cpu_rate >= 608000)
-		return 300000000;	/* cpu 608 MHz, emc 150Mhz */
-	else if (cpu_rate >= 456000)
-		return 150000000;	/* cpu 456 MHz, emc 75Mhz */
 	else if (cpu_rate >= 312000)
-		return 100000000;	/* cpu 312 MHz, emc 50Mhz */
+		return 300000000;	/* cpu 312 MHz, emc 300Mhz */
 	else
-		return 50000000;	/* emc 25Mhz */
+		return 50000000;	/* cpu 216 MHz, emc 25Mhz */
 }
 #endif
 
