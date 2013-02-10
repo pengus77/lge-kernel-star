@@ -47,8 +47,24 @@ static const int core_millivolts[MAX_DVFS_FREQS] =
 #endif
 
 static const int cpu_millivolts[MAX_DVFS_FREQS] =
-#ifdef CONFIG_KOWALSKI_OC
-	{775 /* 216 MHz */, 800 /* 312 MHz */, 825 /* 456 MHz */, 875 /* 608 MHz */, 925 /* 760 MHz */, 950 /* 816 MHz */, 975 /* 912 MHz */, 1000 /* 1000 MHz */, 1075 /* 1100 MHz */, 1125 /* 1200 MHz */, 1150 /* 1248 MHz */, 1200 /* 1300 MHz */, 1250 /* 1352 MHz */, 1300 /* 1404 MHz */, 1325 /* 1456 MHz */};
+#ifdef CONFIG_KOWALSKI_OC /* little bit underclocked compared to wkpark patch */
+	{
+		775 /* 216 MHz */,
+		800 /* 312 MHz */,
+		825 /* 456 MHz */,
+		850 /* 608 MHz */,
+		875 /* 760 MHz */,
+		900 /* 816 MHz */,
+		925 /* 912 MHz */,
+		950 /* 1000 MHz */,
+		1025 /* 1100 MHz */,
+		1075 /* 1200 MHz */,
+		1100 /* 1248 MHz */,
+		1150 /* 1300 MHz */,
+		1200 /* 1352 MHz */,
+		1225 /* 1404 MHz */,
+		1250 /* 1456 MHz */
+	};
 #else
 	{750, 775, 800, 825, 850, 875, 900, 925, 950, 975, 1000, 1025, 1050, 1100, 1125};
 #endif
@@ -56,7 +72,7 @@ static const int cpu_millivolts[MAX_DVFS_FREQS] =
 static const int cpu_speedo_nominal_millivolts[] =
 /* spedo_id  0,    1,    2 */
 #ifdef CONFIG_KOWALSKI_OC
-	{ 1100, 1350, 1125 };
+	{ 1100, 1250, 1125 };
 #else
 	{ 1100, 1025, 1125 };
 #endif
@@ -79,9 +95,9 @@ static struct dvfs_rail tegra2_dvfs_rail_vdd_cpu = {
 #else
 	.max_millivolts = 1125,
 #endif
-	.min_millivolts = 750,
+	.min_millivolts = 700,
 #ifdef CONFIG_KOWALSKI_OC
-	.nominal_millivolts = 1350,
+	.nominal_millivolts = 1250,
 #else
 	.nominal_millivolts = 1125,
 #endif
@@ -261,14 +277,14 @@ static struct dvfs dvfs_init[] = {
 	 */
 	CORE_DVFS("host1x",  -1, 1, KHZ, 104500, 133000, 166000, 166000, 166000, 166000, 166000, 166000, 166000, 166000),
 #ifdef CONFIG_KOWALSKI_OC
-	CORE_DVFS("epp",     -1, 1, KHZ, 133000, 171000, 247000, 333500, 333500, 361000, 361000, 333500, 361000, 361000),
-	CORE_DVFS("2d",      -1, 1, KHZ, 133000, 171000, 247000, 333500, 333500, 361000, 361000, 333500, 361000, 361000),
+	CORE_DVFS("epp",     -1, 1, KHZ, 133000, 171000, 247000, 333500, 333500, 361000, 361000, 361000, 361000, 361000),
+	CORE_DVFS("2d",      -1, 1, KHZ, 133000, 171000, 247000, 333500, 333500, 361000, 361000, 361000, 361000, 361000),
 #else
 	CORE_DVFS("epp",     -1, 1, KHZ, 133000, 171000, 247000, 300000, 300000, 300000, 300000, 300000, 300000, 300000),
 	CORE_DVFS("2d",      -1, 1, KHZ, 133000, 171000, 247000, 300000, 300000, 300000, 300000, 300000, 300000, 300000),
 #endif
 
-	CORE_DVFS("3d",       0, 1, KHZ, 114000, 161500, 247000, 304000, 304000, 333500, 333500, 304000, 333500, 333500),
+	CORE_DVFS("3d",       0, 1, KHZ, 114000, 161500, 247000, 304000, 304000, 333500, 333500, 333500, 333500, 333500),
 	CORE_DVFS("3d",       1, 1, KHZ, 161500, 209000, 285000, 333500, 333500, 361000, 361000, 361000, 361000, 361000),
 	CORE_DVFS("3d",       2, 1, KHZ, 218500, 256500, 323000, 380000, 380000, 400000, 400000, 400000, 400000, 400000),
 	CORE_DVFS("3d",       3, 1, KHZ, 247000, 285000, 351500, 400000, 400000, 400000, 400000, 400000, 400000, 400000),
