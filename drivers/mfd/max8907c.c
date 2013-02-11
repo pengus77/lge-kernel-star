@@ -393,13 +393,13 @@ static int max8907c_i2c_probe(struct i2c_client *i2c,
 	if (pdata->max8907c_setup)
 		return pdata->max8907c_setup();
     // 20110621 hyeongwon.oh@lge.com shutdown core1.2V when entering sleep [S]
-        else{
-            int ret;
-            ret = max8907c_set_bits(max8907c_client, MAX8907C_REG_RESET_CNFG,
-                        MAX8907C_MASK_PWR_EN, MAX8907C_PWR_EN);
-            if (ret != 0)
-                return ret;
-        }
+	else {
+		int ret;
+		ret = max8907c_set_bits(max8907c_client, MAX8907C_REG_RESET_CNFG,
+								MAX8907C_MASK_PWR_EN, MAX8907C_PWR_EN);
+		if (ret != 0)
+			return ret;
+	}
     // 20110621 hyeongwon.oh@lge.com shutdown core1.2V when entering sleep [E]    
 
 	return ret;

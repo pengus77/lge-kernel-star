@@ -300,7 +300,7 @@ static int __devexit max8907c_rtc_remove(struct platform_device *pdev)
 /* RTC Init Structure */
 static struct platform_driver max8907c_rtc_driver = {
 	.driver		= {
-		.name	= "max8907c-rtc",
+		.name	= "max8907c-rtc-fake",
 		.owner	= THIS_MODULE,
 	},
 	.probe		= max8907c_rtc_probe,

@@ -31,8 +31,12 @@
 #include <linux/max8922l.h>
 #include <linux/mfd/max8907c.h>
 #include <linux/su660_battery.h>
-#include <linux/mfd/max8907_rtc.h>
 #include "su660_battery_temp.h"
+
+extern int max8907c_rtc_alarm_write(unsigned int count);
+extern int max8907c_rtc_count_write(unsigned int count);
+extern int max8907c_rtc_alarm_count_read(unsigned int *count);
+extern int max8907c_rtc_count_read(unsigned int *count);
 
 /* Extern MUIC Function */
 extern TYPE_CHARGING_MODE get_muic_charger_type(void);
