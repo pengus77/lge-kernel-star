@@ -49,7 +49,7 @@ static const int core_millivolts[MAX_DVFS_FREQS] =
 static const int cpu_millivolts[MAX_DVFS_FREQS] =
 #ifdef CONFIG_KOWALSKI_OC /* little bit underclocked compared to wkpark patch */
 	{
-		800 /* 216 MHz */,
+		775 /* 216 MHz */,
 		800 /* 312 MHz */,
 		825 /* 456 MHz */,
 		850 /* 608 MHz */,
