@@ -423,7 +423,11 @@ static long tegra_camera_ioctl(struct file *file,
 #ifdef CONFIG_TEGRA_CPU_FREQ_LOCK
 		if (current_usecase == CAMERA_USECASE_PREVIEW)
 			// need test to optimize
+#ifdef CONFIG_KOWALSKI_OC
+			tegra_cpu_lock_speed(1000000, 0, 0); /* min and max cpu clock for preview */
+#else
 			tegra_cpu_lock_speed(312000, 760000, 0); /* min and max cpu clock for preview */
+#endif
 		else if (current_usecase == CAMERA_USECASE_CAMERA_CAPTURE)
 			tegra_cpu_lock_speed(1000000, 0, 5000); /* for snapshot performance */
 		else if (current_usecase == CAMERA_USECASE_VIDEO_RECORD)

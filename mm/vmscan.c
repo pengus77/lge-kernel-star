@@ -2730,6 +2730,8 @@ static int kswapd(void *p)
 			order = balance_pgdat(pgdat, order, &classzone_idx);
 		}
 	}
+
+	current->reclaim_state = NULL;
 	return 0;
 }
 

@@ -650,14 +650,12 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 static void dhd_suspend_resume_helper(struct dhd_info *dhd, int val)
 {
 	dhd_pub_t *dhdp = &dhd->pub;
-	WAKE_LOCK(&dhd->pub, WAKE_LOCK_WATCHDOG);
 	dhd_os_proto_block(dhdp);
 	/* Set flag when early suspend was called */
 	dhdp->in_suspend = val;
 	if (!dhdp->suspend_disable_flag)
 		dhd_set_suspend(val, dhdp);
 	dhd_os_proto_unblock(dhdp);
-	WAKE_UNLOCK(&dhd->pub, WAKE_LOCK_WATCHDOG);
 }
 
 static void dhd_early_suspend(struct early_suspend *h)

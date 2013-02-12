@@ -99,7 +99,7 @@ static enum tune_values {
 static u64 hispeed_freq;
 
 /* Go to hi speed when CPU load at or above this value. */
-#define DEFAULT_GO_HISPEED_LOAD 95
+#define DEFAULT_GO_HISPEED_LOAD 85
 static unsigned long go_hispeed_load;
 /*
  * The minimum amount of time to spend at a frequency before we can ramp down.
@@ -117,7 +117,7 @@ static unsigned long timer_rate;
  * Wait this long before raising speed above hispeed, by default a single
  * timer interval.
  */
-#define DEFAULT_ABOVE_HISPEED_DELAY DEFAULT_TIMER_RATE
+#define DEFAULT_ABOVE_HISPEED_DELAY (10 * USEC_PER_MSEC)
 static unsigned long above_hispeed_delay_val;
 
 /*
