@@ -53,17 +53,17 @@ static const int cpu_millivolts[MAX_DVFS_FREQS] =
 		800 /* 312 MHz */,
 		825 /* 456 MHz */,
 		850 /* 608 MHz */,
-		875 /* 760 MHz */,
-		900 /* 816 MHz */,
-		925 /* 912 MHz */,
-		950 /* 1000 MHz */,
-		1025 /* 1100 MHz */,
-		1075 /* 1200 MHz */,
-		1100 /* 1248 MHz */,
-		1150 /* 1300 MHz */,
-		1200 /* 1352 MHz */,
-		1225 /* 1404 MHz */,
-		1250 /* 1456 MHz */
+		900 /* 760 MHz */,
+		925 /* 816 MHz */,
+		950 /* 912 MHz */,
+		1000 /* 1000 MHz */,
+		1050 /* 1100 MHz */,
+		1100 /* 1200 MHz */,
+		1125 /* 1248 MHz */,
+		1175 /* 1300 MHz */,
+		1225 /* 1352 MHz */,
+		1275 /* 1404 MHz */,
+		1300 /* 1456 MHz */
 	};
 #else
 	{750, 775, 800, 825, 850, 875, 900, 925, 950, 975, 1000, 1025, 1050, 1100, 1125};
@@ -95,9 +95,9 @@ static struct dvfs_rail tegra2_dvfs_rail_vdd_cpu = {
 #else
 	.max_millivolts = 1125,
 #endif
-	.min_millivolts = 700,
+	.min_millivolts = 750,
 #ifdef CONFIG_KOWALSKI_OC
-	.nominal_millivolts = 1250,
+	.nominal_millivolts = 1300,
 #else
 	.nominal_millivolts = 1125,
 #endif
