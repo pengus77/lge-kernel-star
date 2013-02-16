@@ -33,7 +33,7 @@
 
 #include <trace/events/power.h>
 
-#ifdef CONFIG_KOWALSKI_OC
+#ifdef CONFIG_KOWALSKI_UV
 #include "../dvfs.h"
 int *UV_mV_Ptr;
 extern struct dvfs *cpu_dvfs;
@@ -684,7 +684,7 @@ static ssize_t show_bios_limit(struct cpufreq_policy *policy, char *buf)
 	return sprintf(buf, "%u\n", policy->cpuinfo.max_freq);
 }
 
-#ifdef CONFIG_KOWALSKI_OC
+#ifdef CONFIG_KOWALSKI_UV
 static ssize_t show_UV_mV_table(struct cpufreq_policy *policy, char *buf)
 {
 	int i;
@@ -741,7 +741,7 @@ cpufreq_freq_attr_rw(scaling_setspeed);
 cpufreq_freq_attr_ro(policy_min_freq);
 cpufreq_freq_attr_ro(policy_max_freq);
 
-#ifdef CONFIG_KOWALSKI_OC
+#ifdef CONFIG_KOWALSKI_UV
 cpufreq_freq_attr_rw(UV_mV_table);
 #endif
 
@@ -760,7 +760,7 @@ static struct attribute *default_attrs[] = {
 	&policy_min_freq.attr,
 	&policy_max_freq.attr,
 
-#ifdef CONFIG_KOWALSKI_OC
+#ifdef CONFIG_KOWALSKI_UV
 	&UV_mV_table.attr,
 #endif
 	NULL
@@ -1091,18 +1091,27 @@ static int cpufreq_add_dev(struct sys_device *sys_dev)
 
 	/* Set governor before ->init, so that driver could check it */
 #ifdef CONFIG_HOTPLUG_CPU
+	struct cpufreq_policy *cp;
 	for_each_online_cpu(sibling) {
-		struct cpufreq_policy *cp = per_cpu(cpufreq_cpu_data, sibling);
+		cp = per_cpu(cpufreq_cpu_data, sibling);
 		if (cp && cp->governor &&
-		    (cpumask_test_cpu(cpu, cp->related_cpus))) {
+				(cpumask_test_cpu(cpu, cp->related_cpus))) {
+			printk("%s: found sibling CPU, copying policy\n", __FUNCTION__);
 			policy->governor = cp->governor;
+			policy->min = cp->min;
+			policy->max = cp->max;
+			policy->user_policy.min = cp->user_policy.min;
+			policy->user_policy.max = cp->user_policy.max;
 			found = 1;
 			break;
 		}
 	}
 #endif
 	if (!found)
+	{
+		printk("%s: failed to find sibling CPU, falling back to defaults\n", __FUNCTION__);
 		policy->governor = CPUFREQ_DEFAULT_GOVERNOR;
+	}
 	/* call driver. From then on the cpufreq must be able
 	 * to accept all calls to ->verify and ->setpolicy for this CPU
 	 */
@@ -2104,7 +2113,7 @@ static int __init cpufreq_core_init(void)
 	int cpu;
 	int rc;
 
-#ifdef CONFIG_KOWALSKI_OC
+#ifdef CONFIG_KOWALSKI_UV
 	UV_mV_Ptr = kzalloc(sizeof(int)*(MAX_DVFS_FREQS), GFP_KERNEL);
 #endif
 
