@@ -121,7 +121,7 @@ extern void kowalski_wifi_register_dbm_cb(void*);
 
 
 #define WL_IW_USE_ISCAN 1
-#define ENABLE_ACTIVE_PASSIVE_SCAN_SUPPRESS 1
+#define ENABLE_ACTIVE_PASSIVE_SCAN_SUPPRESS 0
 
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 25)) && 1
