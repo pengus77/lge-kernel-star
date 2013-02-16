@@ -51,7 +51,7 @@ static DEFINE_MUTEX(rail_disable_lock);
 
 static int dvfs_rail_update(struct dvfs_rail *rail);
 
-#ifdef CONFIG_KOWALSKI_OC
+#ifdef CONFIG_KOWALSKI_UV
 struct dvfs *cpu_dvfs = NULL;
 extern int *UV_mV_Ptr;
 #endif
@@ -360,7 +360,7 @@ __tegra_dvfs_set_rate(struct dvfs *d, unsigned long rate)
 				" %s\n", d->millivolts[i], d->clk_name);
 			return -EINVAL;
 		}
-#ifdef CONFIG_KOWALSKI_OC
+#ifdef CONFIG_KOWALSKI_UV
 		if (UV_mV_Ptr)
 			d->cur_millivolts = d->millivolts[i] - UV_mV_Ptr[i];
 		else
@@ -481,10 +481,10 @@ int __init tegra_enable_dvfs_on_clk(struct clk *c, struct dvfs *d)
 
 	c->dvfs = d;
 
-#ifdef CONFIG_KOWALSKI_OC
+#ifdef CONFIG_KOWALSKI_UV
 	if (cpu_dvfs == NULL) {
 		if (strcmp(d->clk_name, "cpu") == 0) {
-			pr_info("KOWALSKI_OC: CPU DVFS FOUND");
+			pr_info("KOWALSKI_UV: CPU DVFS FOUND");
 			cpu_dvfs = d;
 		}
 	}

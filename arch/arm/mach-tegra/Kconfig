@@ -300,7 +300,12 @@ config TEGRA_CORE_DVFS
 config KOWALSKI_OC
 	bool "Tegra2 Overclocking Enable"
 	depends on TEGRA_CPU_DVFS && TEGRA_CORE_DVFS
-	default y
+	default n
+
+config KOWALSKI_UV
+	bool "Tegra2 Voltage Control Enable"
+	depends on TEGRA_CPU_DVFS && TEGRA_CORE_DVFS
+	default n
 
 config TEGRA_IOVMM_GART
 	bool "Enable I/O virtual memory manager for GART"
