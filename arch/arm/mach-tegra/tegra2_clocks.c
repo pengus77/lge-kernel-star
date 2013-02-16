@@ -416,7 +416,11 @@ static struct clk tegra2_clk_twd = {
 		 atomic context which cannot take a mutex. */
 	.name     = "twd",
 	.ops      = &tegra2_twd_ops,
+#ifdef CONFIG_KOWALSKI_OC
+	.max_rate = TEGRA_MAX_CLOCK,
+#else
 	.max_rate = 1000000000,	/* Same as tegra_clk_virtual_cpu.max_rate */
+#endif
 	.mul      = 1,
 	.div      = 4,
 };
@@ -1984,17 +1988,22 @@ static struct clk_pll_freq_table tegra_pll_x_freq_table[] = {
 	{ 19200000, 1248000000,  650, 10, 1,  8},
 	{ 26000000, 1248000000,  960, 20, 1, 12},
 #endif
+
+#if defined(CONFIG_MACH_BSSQ) || defined(CONFIG_KOWALSKI_OC)
 	/* 1.2 GHz */
 	{ 12000000, 1200000000, 600,  6,  1, 12},
 	{ 13000000, 1200000000, 923,  10, 1, 12},
 	{ 19200000, 1200000000, 750,  12, 1, 8},
 	{ 26000000, 1200000000, 600,  13, 1, 12},
+#endif
 
+#ifdef CONFIG_KOWALSKI_OC
 	/* 1.1 GHz */
 	{ 12000000, 1100000000, 550, 6, 1, 12},
 	{ 13000000, 1100000000, 770, 10, 1, 12},
 	{ 19200000, 1100000000, 630, 12, 1, 8},
 	{ 26000000, 1100000000, 550, 13, 1, 12},
+#endif
 
 	/* 1 GHz */
 	{ 12000000, 1000000000, 1000, 12, 1, 12},
@@ -2060,7 +2069,7 @@ static struct clk tegra_pll_x = {
 		.cf_min    = 1000000,
 		.cf_max    = 6000000,
 		.vco_min   = 20000000,
-		.vco_max   = 1200000000,
+		.vco_max   = TEGRA_MAX_CLOCK,
 		.freq_table = tegra_pll_x_freq_table,
 		.lock_delay = 300,
 	},
@@ -2711,31 +2720,6 @@ static struct cpufreq_frequency_table freq_table_750MHz[] = {
 	{ 5, CPUFREQ_TABLE_END },
 };
 
-static struct cpufreq_frequency_table freq_table_1p0GHz[] = {
-	{ 0, 216000 },
-	{ 1, 312000 },
-	{ 2, 456000 },
-	{ 3, 608000 },
-	{ 4, 760000 },
-	{ 5, 816000 },
-	{ 6, 912000 },
-	{ 7, 1000000 },
-	{ 8, CPUFREQ_TABLE_END },
-};
-
-static struct cpufreq_frequency_table freq_table_1p2GHz[] = {
-	{ 0, 216000 },
-	{ 1, 312000 },
-	{ 2, 456000 },
-	{ 3, 608000 },
-	{ 4, 760000 },
-	{ 5, 816000 },
-	{ 6, 912000 },
-	{ 7, 1000000 },
-	{ 8, 1200000 },
-	{ 9, CPUFREQ_TABLE_END },
-};
-
 #ifdef CONFIG_KOWALSKI_OC
 static struct cpufreq_frequency_table freq_table_1p4GHz[] = {
 	{ 0, 216000 },
@@ -2755,15 +2739,44 @@ static struct cpufreq_frequency_table freq_table_1p4GHz[] = {
 	{14, 1456000 },
 	{15, CPUFREQ_TABLE_END }
 };
-#endif
+#else
+static struct cpufreq_frequency_table freq_table_1p0GHz[] = {
+	{ 0, 216000 },
+	{ 1, 312000 },
+	{ 2, 456000 },
+	{ 3, 608000 },
+	{ 4, 760000 },
+	{ 5, 816000 },
+	{ 6, 912000 },
+	{ 7, 1000000 },
+	{ 8, CPUFREQ_TABLE_END },
+};
+#ifdef CONFIG_MACH_BSSQ
+static struct cpufreq_frequency_table freq_table_1p2GHz[] = {
+	{ 0, 216000 },
+	{ 1, 312000 },
+	{ 2, 456000 },
+	{ 3, 608000 },
+	{ 4, 760000 },
+	{ 5, 816000 },
+	{ 6, 912000 },
+	{ 7, 1000000 },
+	{ 8, 1200000 },
+	{ 9, CPUFREQ_TABLE_END },
+};
+#endif // CONFIG_MAC_BSSQ
+#endif // CONFIG_KOWALSKI_OC
 
 static struct tegra_cpufreq_table_data cpufreq_tables[] = {
-	{ freq_table_750MHz, 1, 4 },
-	{ freq_table_1p0GHz, 2, 6 },
-	{ freq_table_1p2GHz, 2, 6 },
+	{ freq_table_750MHz, 1, 4 }, // default fallback table
 #ifdef CONFIG_KOWALSKI_OC
-	{ freq_table_1p4GHz, 2, 6 },
-#endif
+	{ freq_table_1p4GHz, 1, 6 },
+#else
+	{ freq_table_1p0GHz, 2, 6 },
+#ifdef CONFIG_MACH_BSSQ
+	{ freq_table_1p2GHz, 2, 7 },
+#endif // CONFIG_MAC_BSSQ
+#endif // CONFIG_KOWALSKI_OC
 };
 
 struct tegra_cpufreq_table_data *tegra_cpufreq_table_get(void)
