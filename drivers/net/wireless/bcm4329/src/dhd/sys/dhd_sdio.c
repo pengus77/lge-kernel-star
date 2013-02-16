@@ -502,13 +502,20 @@ unsigned long cur_jiff;
 int ht_err_cnt;
 extern void htclk_fail_reset(void *bus);
 extern volatile bool dhd_mmc_suspend;
+
+extern struct net_device *g_net_dev;
+extern bool 	ap_fw_loaded;
+extern int net_os_send_hang_message(struct net_device *dev);
 #endif
 
+#define HT_AVAIL_ERROR_MAX	10
 
 /* Turn backplane clock on or off */
 static int
 dhdsdio_htclk(dhd_bus_t *bus, bool on, bool pendok)
 {
+	static int ht_avail_error = 0;
+
 	int err;
 	uint8 clkctl, clkreq, devctl;
 	bcmsdh_info_t *sdh;
@@ -529,25 +536,18 @@ dhdsdio_htclk(dhd_bus_t *bus, bool on, bool pendok)
 		if ((bus->sih->chip == BCM4329_CHIP_ID) && (bus->sih->chiprev == 0))
 			clkreq |= SBSDIO_FORCE_ALP;
 
-
-
-
 		bcmsdh_cfg_write(sdh, SDIO_FUNC_1, SBSDIO_FUNC1_CHIPCLKCSR, clkreq, &err);
 		if (err) {
-#if defined(CONFIG_LGE_BCM432X_PATCH)	//htclk fail patch
-			if( ht_err_cnt == 0 )
-				old_jiff = jiffies;
-
-			cur_jiff = jiffies;
-			
-			if( (cur_jiff < old_jiff) || (cur_jiff - old_jiff) > 500 )
-				ht_err_cnt = 0;
-			else
-				ht_err_cnt++;
-#endif
-//			printk("[DEBUG] %s:%d dhd_mmc_suspend %d\n",__func__,__LINE__,dhd_mmc_suspend);
-			DHD_ERROR(("%s: HT Avail request error: %d\n", __FUNCTION__, err));
+			ht_avail_error++;
+			if (ht_avail_error < HT_AVAIL_ERROR_MAX) {
+				DHD_ERROR(("%s: HT Avail request error: %d\n", __FUNCTION__, err));
+			} else {
+				if (ht_avail_error == HT_AVAIL_ERROR_MAX)
+					net_os_send_hang_message(g_net_dev);
+				}
 			return BCME_ERROR;
+		} else {
+			ht_avail_error = 0;
 		}
 
 		if (pendok &&
@@ -4046,12 +4046,6 @@ dhdsdio_hostmail(dhd_bus_t *bus)
 
 	return intstatus;
 }
-
-#if defined(CONFIG_LGE_BCM432X_PATCH)		//by sjpark 11-02-01
-extern struct net_device *g_net_dev;
-extern bool 	ap_fw_loaded;
-extern int net_os_send_hang_message(struct net_device *dev);
-#endif
 
 bool
 dhdsdio_dpc(dhd_bus_t *bus)
