@@ -33,6 +33,10 @@
 
 #include <trace/events/power.h>
 
+#ifdef CONFIG_KOWALSKI_CPU_SUSPEND_FREQ_LIMIT
+unsigned int kowalski_cpu_suspend_max_freq = 1000000;
+#endif
+
 #ifdef CONFIG_KOWALSKI_UV
 #include "../dvfs.h"
 int *UV_mV_Ptr;
@@ -724,6 +728,25 @@ static ssize_t store_UV_mV_table(struct cpufreq_policy *policy, const char *buf,
 }
 #endif
 
+#ifdef CONFIG_KOWALSKI_CPU_SUSPEND_FREQ_LIMIT
+static ssize_t show_screen_off_max_freq(struct cpufreq_policy *policy, char *buf)
+{
+	return sprintf(buf, "%d\n", kowalski_cpu_suspend_max_freq);
+}
+
+static ssize_t store_screen_off_max_freq(struct cpufreq_policy *policy, const char *buf, size_t count)
+{
+	unsigned int max;
+	max = simple_strtoul(buf, NULL, 10);
+
+	if (max <= policy->cpuinfo.max_freq && max >= policy->cpuinfo.min_freq) {
+		kowalski_cpu_suspend_max_freq = max;
+	}
+
+	return count;
+}
+#endif
+
 cpufreq_freq_attr_ro_perm(cpuinfo_cur_freq, 0400);
 cpufreq_freq_attr_ro(cpuinfo_min_freq);
 cpufreq_freq_attr_ro(cpuinfo_max_freq);
@@ -745,6 +768,10 @@ cpufreq_freq_attr_ro(policy_max_freq);
 cpufreq_freq_attr_rw(UV_mV_table);
 #endif
 
+#ifdef CONFIG_KOWALSKI_CPU_SUSPEND_FREQ_LIMIT
+cpufreq_freq_attr_rw(screen_off_max_freq);
+#endif
+
 static struct attribute *default_attrs[] = {
 	&cpuinfo_min_freq.attr,
 	&cpuinfo_max_freq.attr,
@@ -762,6 +789,10 @@ static struct attribute *default_attrs[] = {
 
 #ifdef CONFIG_KOWALSKI_UV
 	&UV_mV_table.attr,
+#endif
+
+#ifdef CONFIG_KOWALSKI_CPU_SUSPEND_FREQ_LIMIT
+	&screen_off_max_freq.attr,
 #endif
 	NULL
 };
