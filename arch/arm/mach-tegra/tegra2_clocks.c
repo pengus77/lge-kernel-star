@@ -2476,9 +2476,9 @@ struct clk tegra_list_periph_clks[] = {
 	PERIPH_CLK("bsea",	"tegra-avp",		"bsea",	62,	0,	0x31E,	250000000, mux_clk_m, 			0),
 	PERIPH_CLK("bsev",	"tegra-aes",		"bsev",	63,	0,	0x31E,  250000000, mux_clk_m, 			0),
 #ifdef CONFIG_KOWALSKI_OC
-	PERIPH_CLK("vde",	"tegra-avp",		"vde",	61,	0x1c8,	0x31E,	250000000, mux_pllp_pllc_pllm_clkm,	MUX | DIV_U71), /* scales with voltage and process_id */
-#else
 	PERIPH_CLK("vde",	"tegra-avp",		"vde",	61,	0x1c8,	0x31E,	350000000, mux_pllp_pllc_pllm_clkm,	MUX | DIV_U71), /* scales with voltage and process_id */
+#else
+	PERIPH_CLK("vde",	"tegra-avp",		"vde",	61,	0x1c8,	0x31E,	250000000, mux_pllp_pllc_pllm_clkm,	MUX | DIV_U71), /* scales with voltage and process_id */
 #endif
 	PERIPH_CLK("csite",	"csite",		NULL,	73,	0x1d4,	0x31E,	144000000, mux_pllp_pllc_pllm_clkm,	MUX | DIV_U71), /* max rate ??? */
 	/* FIXME: what is la? */
@@ -2664,9 +2664,9 @@ static struct tegra_sku_rate_limit sku_limits[] =
 	RATE_LIMIT("pll_x",	1200000000, 0x14, 0x17, 0x18, 0x1B, 0x1C),
 
 #ifdef CONFIG_KOWALSKI_OC
-	RATE_LIMIT("sclk",	400000000, 0x04, 0x7, 0x08, 0x0F, 0x10),
-	RATE_LIMIT("hclk",	400000000, 0x04, 0x7, 0x08, 0x0F, 0x10),
-	RATE_LIMIT("vde",	400000000, 0x04, 0x7, 0x08, 0x0F, 0x10),
+	RATE_LIMIT("sclk",	350000000, 0x04, 0x7, 0x08, 0x0F, 0x10),
+	RATE_LIMIT("hclk",	350000000, 0x04, 0x7, 0x08, 0x0F, 0x10),
+	RATE_LIMIT("vde",	350000000, 0x04, 0x7, 0x08, 0x0F, 0x10),
 	RATE_LIMIT("3d",	400000000, 0x04, 0x7, 0x08, 0x0F, 0x10),
 
 	RATE_LIMIT("host1x",166000000, 0x0F),
