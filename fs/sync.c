@@ -219,11 +219,6 @@ static int do_fsync(unsigned int fd, int datasync)
 	int ret = -EBADF;
 	int fput_needed;
 
-#ifdef CONFIG_FSYNC_CONTROL
-	if (!fsynccontrol_fsync_enabled())
-	    return 0;
-#endif
-
 	file = fget_light(fd, &fput_needed);
 	if (file) {
 		ret = vfs_fsync(file, datasync);
@@ -234,11 +229,21 @@ static int do_fsync(unsigned int fd, int datasync)
 
 SYSCALL_DEFINE1(fsync, unsigned int, fd)
 {
+#ifdef CONFIG_DYNAMIC_FSYNC
+	if (!early_suspend_active)
+		return 0;
+#endif
+
 	return do_fsync(fd, 0);
 }
 
 SYSCALL_DEFINE1(fdatasync, unsigned int, fd)
 {
+#ifdef CONFIG_DYNAMIC_FSYNC
+	if (!early_suspend_active)
+		return 0;
+#endif
+
 	return do_fsync(fd, 1);
 }
 
