@@ -30,8 +30,8 @@
  */
 static DEFINE_MUTEX(fsync_mutex);
 
-bool early_suspend_active = false;
-static bool dyn_fsync_active = false;
+bool dyn_fsync_early_suspend = false;
+bool dyn_fsync_active = false;
 
 static ssize_t dyn_fsync_active_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
@@ -66,7 +66,7 @@ static ssize_t dyn_fsync_version_show(struct kobject *kobj, struct kobj_attribut
 
 static ssize_t dyn_fsync_earlysuspend_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-	return sprintf(buf, "early suspend active: %u\n", early_suspend_active);
+	return sprintf(buf, "early suspend active: %u\n", dyn_fsync_early_suspend);
 }
 
 static struct kobj_attribute dyn_fsync_active_attribute = 
@@ -99,7 +99,7 @@ static void dyn_fsync_flush(void)
 	if (dyn_fsync_active) {
 		pr_info("%s: flushing all outstanding buffers\n", __FUNCTION__);
 
-		early_suspend_active = true;
+		dyn_fsync_early_suspend = true;
 		wakeup_flusher_threads(0);
 		sync_filesystems(0);
 		sync_filesystems(1);
@@ -107,24 +107,24 @@ static void dyn_fsync_flush(void)
 	mutex_unlock(&fsync_mutex);
 }
 
-static void dyn_fsync_early_suspend(struct early_suspend *h)
+static void dyn_fsync_suspend(struct early_suspend *h)
 {
 	dyn_fsync_flush();
 }
 
-static void dyn_fsync_late_resume(struct early_suspend *h)
+static void dyn_fsync_resume(struct early_suspend *h)
 {
 	mutex_lock(&fsync_mutex);
 	if (dyn_fsync_active) {
-		early_suspend_active = false;
+		dyn_fsync_early_suspend = false;
 	}
 	mutex_unlock(&fsync_mutex);
 }
 
 static struct early_suspend dyn_fsync_early_suspend_handler = {
 	.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN,
-	.suspend = dyn_fsync_early_suspend,
-	.resume = dyn_fsync_late_resume,
+	.suspend = dyn_fsync_suspend,
+	.resume = dyn_fsync_resume,
 };
 
 static int dyn_fsync_notify(struct notifier_block *nb,
