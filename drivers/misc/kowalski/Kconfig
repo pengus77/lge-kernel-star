@@ -27,4 +27,19 @@ config KOWALSKI_WIFI_PM
 	  the configuration of the wifi pm modes from user
 	  space.
 
+config KOWALSKI_OC
+	bool "Enable Overclocking"
+	depends on TEGRA_CPU_DVFS && TEGRA_CORE_DVFS
+	default n
+
+config KOWALSKI_UV
+	bool "Enable Voltage Control"
+	depends on TEGRA_CPU_DVFS && TEGRA_CORE_DVFS
+	default n
+
+config KOWALSKI_CPU_SUSPEND_FREQ_LIMIT
+	bool "Enable CPU Clock Frequency Limit in Suspend"
+	depends on TEGRA_CPU_DVFS && TEGRA_CORE_DVFS
+	default n
+
 endif # KOWALSKI

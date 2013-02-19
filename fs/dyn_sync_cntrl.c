@@ -1,5 +1,6 @@
 /*
  * Author: Paul Reioux aka Faux123 <reioux@gmail.com>
+ * Reworked and fixed: Ivan Cerrato aka pengus77 <ivan@cerrato.biz>
  *
  * Copyright 2012 Paul Reioux
  *
@@ -19,10 +20,10 @@
 #include <linux/sysfs.h>
 #include <linux/earlysuspend.h>
 #include <linux/mutex.h>
-
+#include <linux/reboot.h>
 #include <linux/writeback.h>
 
-#define DYN_FSYNC_VERSION 1
+#define DYN_FSYNC_VERSION 2
 
 /*
  * fsync_mutex protects dyn_fsync_active during early suspend / lat resume transitions
@@ -92,40 +93,57 @@ static struct attribute_group dyn_fsync_active_attr_group =
 
 static struct kobject *dyn_fsync_kobj;
 
-static void dyn_fsync_early_suspend(struct early_suspend *h)
+static void dyn_fsync_flush(void)
 {
 	mutex_lock(&fsync_mutex);
 	if (dyn_fsync_active) {
+		pr_info("%s: flushing all outstanding buffers\n", __FUNCTION__);
+
 		early_suspend_active = true;
-#if 1
-		/* flush all outstanding buffers */
 		wakeup_flusher_threads(0);
 		sync_filesystems(0);
 		sync_filesystems(1);
-#endif
 	}
 	mutex_unlock(&fsync_mutex);
+}
+
+static void dyn_fsync_early_suspend(struct early_suspend *h)
+{
+	dyn_fsync_flush();
 }
 
 static void dyn_fsync_late_resume(struct early_suspend *h)
 {
 	mutex_lock(&fsync_mutex);
-	early_suspend_active = false;
+	if (dyn_fsync_active) {
+		early_suspend_active = false;
+	}
 	mutex_unlock(&fsync_mutex);
 }
 
-static struct early_suspend dyn_fsync_early_suspend_handler = 
-	{
-		.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN,
-		.suspend = dyn_fsync_early_suspend,
-		.resume = dyn_fsync_late_resume,
-	};
+static struct early_suspend dyn_fsync_early_suspend_handler = {
+	.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN,
+	.suspend = dyn_fsync_early_suspend,
+	.resume = dyn_fsync_late_resume,
+};
+
+static int dyn_fsync_notify(struct notifier_block *nb,
+                                unsigned long event, void *data)
+{
+	dyn_fsync_flush();
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block dyn_fsync_reboot_handler = {
+        .notifier_call = dyn_fsync_notify,
+};
 
 static int dyn_fsync_init(void)
 {
 	int sysfs_result;
 
 	register_early_suspend(&dyn_fsync_early_suspend_handler);
+	register_reboot_notifier(&dyn_fsync_reboot_handler);
 
 	dyn_fsync_kobj = kobject_create_and_add("dyn_fsync", kernel_kobj);
 	if (!dyn_fsync_kobj) {
@@ -135,7 +153,7 @@ static int dyn_fsync_init(void)
 
 	sysfs_result = sysfs_create_group(dyn_fsync_kobj, &dyn_fsync_active_attr_group);
 
-        if (sysfs_result) {
+	if (sysfs_result) {
 		pr_info("%s dyn_fsync sysfs create failed!\n", __FUNCTION__);
 		kobject_put(dyn_fsync_kobj);
 	}
@@ -145,6 +163,7 @@ static int dyn_fsync_init(void)
 static void dyn_fsync_exit(void)
 {
 	unregister_early_suspend(&dyn_fsync_early_suspend_handler);
+	unregister_reboot_notifier(&dyn_fsync_reboot_handler);
 
 	if (dyn_fsync_kobj != NULL)
 		kobject_put(dyn_fsync_kobj);
@@ -152,4 +171,3 @@ static void dyn_fsync_exit(void)
 
 module_init(dyn_fsync_init);
 module_exit(dyn_fsync_exit);
-
