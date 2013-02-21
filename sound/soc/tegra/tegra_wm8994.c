@@ -180,7 +180,6 @@ static int tegra_wm8994_hw_params(struct snd_pcm_substream *substream,
 	}
 */
 	cdev_srate = clk_get_rate(machine->util_data.clk_cdev1);
-	printk(KERN_ERR "tegra_soc_wm8994.c tegra_wm8994_hw_params sys_clk=%d\n",cdev_srate); 
 #if 0
 	err = snd_soc_dai_set_pll(codec_dai, WM8994_FLL1, WM8994_FLL_SRC_MCLK1, cdev_srate, 11289600/* I2S1_CLK*/);
 	if (err < 0) {
