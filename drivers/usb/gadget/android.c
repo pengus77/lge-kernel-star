@@ -1427,7 +1427,7 @@ android_bind_enabled_functions(struct android_dev *dev,
 	int ret;
 
 	list_for_each_entry(f, &dev->enabled_functions, enabled_list) {
-		printk("[msg usb] android.c >> %s : f-> name =%s \n" , __func__, f->name );
+		// printk("[msg usb] android.c >> %s : f-> name =%s \n" , __func__, f->name );
 		ret = f->bind_config(f, c);
 		if (ret) {
 			pr_err("%s: %s failed", __func__, f->name);
@@ -1505,7 +1505,7 @@ functions_store(struct device *pdev, struct device_attribute *attr,
 
 	while (b) {
 		name = strsep(&b, ",");
-		printk("[usb msg] android.c >> %s , name=%s \n", __func__ ,name );
+		// printk("[usb msg] android.c >> %s , name=%s \n", __func__ ,name );
 		if (name) {
 			err = android_enable_function(dev, name);
 			if (err)
@@ -1684,7 +1684,7 @@ static int android_bind(struct usb_composite_dev *cdev)
 
 	usb_gadget_disconnect(gadget);
 
-	printk("[msg usb]  android .c >> %s :start \n" , __func__ );
+	// printk("[msg usb]  android .c >> %s :start \n" , __func__ );
 	ret = android_init_functions(dev->functions, cdev);
 	if (ret)
 		return ret;
@@ -1753,7 +1753,7 @@ static int android_bind(struct usb_composite_dev *cdev)
 
 	usb_gadget_set_selfpowered(gadget);
 	dev->cdev = cdev;
-	printk("[msg usb]  android .c >> %s :end \n" , __func__ );
+	// printk("[msg usb]  android .c >> %s :end \n" , __func__ );
 
 	return 0;
 }
@@ -1788,7 +1788,7 @@ android_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *c)
 	req->complete = composite_setup_complete;
 	req->length = 0;
 	gadget->ep0->driver_data = cdev;
-	printk("[msg usb]  android .c >> %s : \n" , __func__ );
+	// printk("[msg usb]  android .c >> %s : \n" , __func__ );
 
 	list_for_each_entry(f, &dev->enabled_functions, enabled_list) {
 		if (f->ctrlrequest) {
@@ -1839,7 +1839,7 @@ static int android_create_device(struct android_dev *dev)
 	struct device_attribute **attrs = android_usb_attributes;
 	struct device_attribute *attr;
 	int err;
-	printk("[msg usb]  android .c >> %s : \n" , __func__ );
+	// printk("[msg usb]  android .c >> %s : \n" , __func__ );
 
 	dev->dev = device_create(android_class, NULL,
 					MKDEV(0, 0), NULL, "android0");
