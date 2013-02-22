@@ -160,7 +160,11 @@
 #define AP25_EMC_SCALING_STEP		600000000
 
 #ifdef CONFIG_KOWALSKI_OC
+#ifdef CONFIG_KOWALSKI_MAX_OC
 #define TEGRA_MAX_CLOCK			1456000000
+#else
+#define TEGRA_MAX_CLOCK			1200000000
+#endif //CONFIG_KOWALSKI_MAX_OC
 #else
 #define TEGRA_MAX_CLOCK			1000000000
 #endif
@@ -416,11 +420,7 @@ static struct clk tegra2_clk_twd = {
 		 atomic context which cannot take a mutex. */
 	.name     = "twd",
 	.ops      = &tegra2_twd_ops,
-#ifdef CONFIG_KOWALSKI_OC
-	.max_rate = TEGRA_MAX_CLOCK,
-#else
-	.max_rate = 1000000000,	/* Same as tegra_clk_virtual_cpu.max_rate */
-#endif
+	.max_rate = 1000000000,
 	.mul      = 1,
 	.div      = 4,
 };
@@ -1957,7 +1957,7 @@ static struct clk tegra_pll_u = {
 };
 
 static struct clk_pll_freq_table tegra_pll_x_freq_table[] = {
-#ifdef CONFIG_KOWALSKI_OC
+#if defined(CONFIG_KOWALSKI_OC) && defined(CONFIG_KOWALSKI_MAX_OC)
 	/* 1.456 GHz */
 	{ 12000000, 1456000000,  728,  6, 1, 12},
 	{ 13000000, 1456000000,  896,  8, 1, 12},
@@ -2224,7 +2224,7 @@ static struct clk tegra_clk_virtual_cpu = {
 	.name      = "cpu",
 	.parent    = &tegra_clk_cclk,
 	.ops       = &tegra_cpu_ops,
-	.max_rate  = TEGRA_MAX_CLOCK,
+	.max_rate  = 1000000000,
 	.u.cpu = {
 		.main      = &tegra_pll_x,
 		.backup    = &tegra_pll_p,
@@ -2475,11 +2475,7 @@ struct clk tegra_list_periph_clks[] = {
 	PERIPH_CLK("vcp",	"tegra-avp",		"vcp",	29,	0,	0x31E,	250000000, mux_clk_m, 			0),
 	PERIPH_CLK("bsea",	"tegra-avp",		"bsea",	62,	0,	0x31E,	250000000, mux_clk_m, 			0),
 	PERIPH_CLK("bsev",	"tegra-aes",		"bsev",	63,	0,	0x31E,  250000000, mux_clk_m, 			0),
-#ifdef CONFIG_KOWALSKI_OC
-	PERIPH_CLK("vde",	"tegra-avp",		"vde",	61,	0x1c8,	0x31E,	350000000, mux_pllp_pllc_pllm_clkm,	MUX | DIV_U71), /* scales with voltage and process_id */
-#else
 	PERIPH_CLK("vde",	"tegra-avp",		"vde",	61,	0x1c8,	0x31E,	250000000, mux_pllp_pllc_pllm_clkm,	MUX | DIV_U71), /* scales with voltage and process_id */
-#endif
 	PERIPH_CLK("csite",	"csite",		NULL,	73,	0x1d4,	0x31E,	144000000, mux_pllp_pllc_pllm_clkm,	MUX | DIV_U71), /* max rate ??? */
 	/* FIXME: what is la? */
 	PERIPH_CLK("la",	"la",			NULL,	76,	0x1f8,	0x31E,	26000000,  mux_pllp_pllc_pllm_clkm,	MUX | DIV_U71),
@@ -2495,22 +2491,12 @@ struct clk tegra_list_periph_clks[] = {
 	PERIPH_CLK("uartc",	"tegra_uart.2",		NULL,	55,	0x1a0,	0x31E,	600000000, mux_pllp_pllc_pllm_clkm,	MUX | PERIPH_ON_APB),
 	PERIPH_CLK("uartd",	"tegra_uart.3",		NULL,	65,	0x1c0,	0x31E,	600000000, mux_pllp_pllc_pllm_clkm,	MUX | PERIPH_ON_APB),
 	PERIPH_CLK("uarte",	"tegra_uart.4",		NULL,	66,	0x1c4,	0x31E,	600000000, mux_pllp_pllc_pllm_clkm,	MUX | PERIPH_ON_APB),
-#ifdef CONFIG_KOWALSKI_OC
-	PERIPH_CLK("3d",	"3d",			NULL,	24,	0x158,	0x31E,	400000000, mux_pllm_pllc_pllp_plla,	MUX | DIV_U71 | PERIPH_MANUAL_RESET), /* scales with voltage and process_id */
-	PERIPH_CLK("2d",	"2d",			NULL,	21,	0x15c,	0x31E,	350000000, mux_pllm_pllc_pllp_plla,	MUX | DIV_U71), /* scales with voltage and process_id */
-#else
 	PERIPH_CLK("3d",	"3d",			NULL,	24,	0x158,	0x31E,	300000000, mux_pllm_pllc_pllp_plla,	MUX | DIV_U71 | PERIPH_MANUAL_RESET), /* scales with voltage and process_id */
 	PERIPH_CLK("2d",	"2d",			NULL,	21,	0x15c,	0x31E,	300000000, mux_pllm_pllc_pllp_plla,	MUX | DIV_U71), /* scales with voltage and process_id */
-#endif
 	PERIPH_CLK("vi",	"tegra_camera",		"vi",	20,	0x148,	0x31E,	150000000, mux_pllm_pllc_pllp_plla,	MUX | DIV_U71), /* scales with voltage and process_id */
 	PERIPH_CLK("vi_sensor",	"tegra_camera",		"vi_sensor",	20,	0x1a8,	0x31E,	150000000, mux_pllm_pllc_pllp_plla,	MUX | DIV_U71 | PERIPH_NO_RESET), /* scales with voltage and process_id */
-#ifdef CONFIG_KOWALSKI_OC
-	PERIPH_CLK("epp",	"epp",			NULL,	19,	0x16c,	0x31E,	350000000, mux_pllm_pllc_pllp_plla,	MUX | DIV_U71), /* scales with voltage and process_id */
-	PERIPH_CLK("mpe",	"mpe",			NULL,	60,	0x170,	0x31E,	350000000, mux_pllm_pllc_pllp_plla,	MUX | DIV_U71), /* scales with voltage and process_id */
-#else
 	PERIPH_CLK("epp",	"epp",			NULL,	19,	0x16c,	0x31E,	300000000, mux_pllm_pllc_pllp_plla,	MUX | DIV_U71), /* scales with voltage and process_id */
 	PERIPH_CLK("mpe",	"mpe",			NULL,	60,	0x170,	0x31E,	300000000, mux_pllm_pllc_pllp_plla,	MUX | DIV_U71), /* scales with voltage and process_id */
-#endif
 	PERIPH_CLK("host1x",	"host1x",		NULL,	28,	0x180,	0x31E,	166000000, mux_pllm_pllc_pllp_plla,	MUX | DIV_U71), /* scales with voltage and process_id */
 	PERIPH_CLK("cve",	"cve",			NULL,	49,	0x140,	0x31E,	250000000, mux_pllp_plld_pllc_clkm,	MUX | DIV_U71), /* requires min voltage */
 	PERIPH_CLK("tvo",	"tvo",			NULL,	49,	0x188,	0x31E,	250000000, mux_pllp_plld_pllc_clkm,	MUX | DIV_U71), /* requires min voltage */
@@ -2663,21 +2649,12 @@ static struct tegra_sku_rate_limit sku_limits[] =
 	RATE_LIMIT("cclk",	1200000000, 0x14, 0x17, 0x18, 0x1B, 0x1C),
 	RATE_LIMIT("pll_x",	1200000000, 0x14, 0x17, 0x18, 0x1B, 0x1C),
 
-#ifdef CONFIG_KOWALSKI_OC
-	RATE_LIMIT("sclk",	350000000, 0x04, 0x7, 0x08, 0x0F, 0x10),
-	RATE_LIMIT("hclk",	350000000, 0x04, 0x7, 0x08, 0x0F, 0x10),
-	RATE_LIMIT("vde",	350000000, 0x04, 0x7, 0x08, 0x0F, 0x10),
-	RATE_LIMIT("3d",	380000000, 0x04, 0x7, 0x08, 0x0F, 0x10),
-
-	RATE_LIMIT("host1x",166000000, 0x0F),
-#else
 	RATE_LIMIT("sclk",	240000000, 0x04, 0x7, 0x08, 0x0F, 0x10),
 	RATE_LIMIT("hclk",	240000000, 0x04, 0x7, 0x08, 0x0F, 0x10),
 	RATE_LIMIT("vde",	240000000, 0x04, 0x7, 0x08, 0x0F, 0x10),
 	RATE_LIMIT("3d",	300000000, 0x04, 0x7, 0x08, 0x0F, 0x10),
 
 	RATE_LIMIT("host1x",108000000, 0x0F),
-#endif
 
 	RATE_LIMIT("sclk",	300000000, 0x14, 0x17, 0x18, 0x1B, 0x1C),
 	RATE_LIMIT("virt_sclk",	300000000, 0x14, 0x17, 0x18, 0x1B, 0x1C),
@@ -2764,11 +2741,12 @@ static struct cpufreq_frequency_table freq_table_1p2GHz[] = {
 	{ 5, 816000 },
 	{ 6, 912000 },
 	{ 7, 1000000 },
-	{ 8, 1200000 },
-	{ 9, CPUFREQ_TABLE_END },
+	{ 8, 1100000 },
+	{ 9, 1200000 },
+	{ 10, CPUFREQ_TABLE_END },
 };
 
-#ifdef CONFIG_KOWALSKI_OC
+#ifdef CONFIG_KOWALSKI_MAX_OC
 static struct cpufreq_frequency_table freq_table_1p4GHz[] = {
 	{ 0, 216000 },
 	{ 1, 312000 },
@@ -2785,7 +2763,7 @@ static struct cpufreq_frequency_table freq_table_1p4GHz[] = {
 	{12, 1352000 },
 	{13, 1404000 },
 	{14, 1456000 },
-	{15, CPUFREQ_TABLE_END }
+	{15, CPUFREQ_TABLE_END },
 };
 #endif
 
@@ -2793,9 +2771,9 @@ static struct tegra_cpufreq_table_data cpufreq_tables[] = {
 	{ freq_table_750MHz, 1, 4 }, // default fallback table
 	{ freq_table_1p0GHz, 2, 6 },
 	{ freq_table_1p2GHz, 2, 7 },
-#ifdef CONFIG_KOWALSKI_OC
+#if defined(CONFIG_KOWALSKI_OC) && defined(CONFIG_KOWALSKI_MAX_OC)
 	{ freq_table_1p4GHz, 2, 6 },
-#endif // CONFIG_KOWALSKI_OC
+#endif // CONFIG_KOWALSKI_MAX_OC
 };
 
 struct tegra_cpufreq_table_data *tegra_cpufreq_table_get(void)
@@ -2826,7 +2804,7 @@ unsigned long tegra_emc_to_cpu_ratio(unsigned long cpu_rate)
 	else
 		return 50000000;	/* cpu 216 MHz, emc 25Mhz */
 }
-#endif
+#endif //CONFIG_CPU_FREQ
 
 #ifdef CONFIG_PM_SLEEP
 static u32 clk_rst_suspend[RST_DEVICES_NUM + CLK_OUT_ENB_NUM +
