@@ -179,6 +179,9 @@ static ssize_t store_vibrator_force(struct device *dev,
 {
 	long data = simple_strtol(buf, NULL, 10);
 
+	if (pwm_enabled(nv_vib_pwm))
+		pwm_disable(nv_vib_pwm);
+
 	if (data > MAX_VIBRATOR_FORCE) {
 		vibrator_force = MAX_VIBRATOR_FORCE;
 	} else if (data < (-1 * MAX_VIBRATOR_FORCE)) {
@@ -208,10 +211,12 @@ static ssize_t store_vibrator_level(struct device *dev,
 {
 	long data = simple_strtol(buf, NULL, 10);
 
-	pwm_disable(nv_vib_pwm);
+	if (pwm_enabled(nv_vib_pwm))
+		pwm_disable(nv_vib_pwm);
+
 	if (data > MAX_VIBRATOR_LEVEL) {
 		vibrator_level = MAX_VIBRATOR_LEVEL;
-	} else if (data < DEFAULT_VIBRATOR_LEVEL) {
+	} else if (data > DEFAULT_VIBRATOR_LEVEL || data < 0) {
 		vibrator_level = DEFAULT_VIBRATOR_LEVEL;
 	} else {
 		vibrator_level = data;
