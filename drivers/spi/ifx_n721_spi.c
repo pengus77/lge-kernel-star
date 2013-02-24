@@ -410,7 +410,7 @@ static int ifx_spi_write(struct tty_struct *tty, const unsigned char *buf, int c
 	fWrite[id] = 1;
 	uiTxlen[id] = count + IFX_SPI_HEADER_SIZE;
 	//ulStart = getuSecTime();
-	do_gettimeofday(&ulStart[id]); //RTC(Real Time Clock)의 현재 실행시간
+	do_gettimeofday(&ulStart[id]); //RTC(Real Time Clock)
 #endif
 
 	if( !buf )
@@ -707,14 +707,12 @@ static int ifx_spi_suspend(struct spi_device *spi, pm_message_t mesg)
      
      bSuspend = 1;
 
-   // address를 주면 값을 read
     status = readl(pmc_base + PMC_WAKE_STATUS);
 
     // Clear power key wakeup pad bit.
     if (status & WAKEUP_IFX_SRDY_MASK)
     {
         IFX_SPI_PRINTK(" wakeup pad : 0x%lx", status);
-        //주소와 값을 주면 주소에 값을 write		
         writel(WAKEUP_IFX_SRDY_MASK, pmc_base + PMC_WAKE_STATUS);
     }
 
@@ -1055,7 +1053,6 @@ static void ifx_spi_send_and_receive_data(struct ifx_spi_data *spi_data)
 		spi_data->ifx_ret_count = spi_data->ifx_ret_count + spi_data->ifx_valid_frame_size;
 	}
 
-       //ifx modem에서만 rx buf에 data 없으면 return... 
 	if (*((int*)spi_data->ifx_rx_buffer) == 0xFFFFFFFF)
 	{
 		spi_data->ifx_receiver_buf_size = 0;
@@ -1067,7 +1064,6 @@ static void ifx_spi_send_and_receive_data(struct ifx_spi_data *spi_data)
 	/* Handling Received data */
 	spi_data->ifx_receiver_buf_size = ifx_spi_get_header_info(spi_data->ifx_rx_buffer, &rx_valid_buf_size);
 
-        // spi에서 rx data가 존재하면 tty 로 전송
 	if((spi_data->throttle == 0) && (rx_valid_buf_size != 0))
 	{ 
 		if(spi_data->ifx_tty)
@@ -1080,7 +1076,6 @@ static void ifx_spi_send_and_receive_data(struct ifx_spi_data *spi_data)
 		 ifx_dump_atcmd(spi_data->ifx_rx_buffer+IFX_SPI_HEADER_SIZE+2) ;	 
 #endif	
 
-		 /* spi에서 rx data가 존재하면 tty 로 전송	*/
 #ifdef IFX_SPI_SPEED_MEASUREMENT
 			uiRxlen[spi_data->ifx_tty->index] = rx_valid_buf_size+IFX_SPI_HEADER_SIZE;
 #endif		
@@ -1118,8 +1113,6 @@ static void ifx_spi_send_and_receive_data(struct ifx_spi_data *spi_data)
 
 static unsigned int ifx_spi_sync_read_write(struct ifx_spi_data *spi_data, unsigned int len)
 {
-	bool spi_suspend_failed;
-
 	int status;
 	int ipc_check;
 	struct spi_message	m;
@@ -1168,20 +1161,12 @@ static unsigned int ifx_spi_sync_read_write(struct ifx_spi_data *spi_data, unsig
         	//reset 'count_transfer_failed' to zero, if spi transter succeeds at least one out of five times
 	        count_transfer_failed = 0;		
 	}
-        else
+	else
 	{
 		ipc_check = ifx_modem_communicating();
 		if(ipc_check == 0) 
-		{
 			IFX_SPI_PRINTK("transmission unsuccessful, [spi_sync] status:%d, count_Failed:%d\n", status, count_transfer_failed);
-				
-			spi_suspend_failed = spi_tegra_suspend_failed(spi_data->spi);
-			if (spi_suspend_failed)
-			{
-				IFX_SPI_PRINTK("kernel_restart!!!, spi_suspend_failed=%d \n", spi_suspend_failed);		 
-				kernel_restart(NULL);
-			 }				
-		}
+
 		//increase 'count_transfer_failed', when spi transter fails
 		count_transfer_failed++;		
     }
