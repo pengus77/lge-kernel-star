@@ -161,7 +161,7 @@
 
 #ifdef CONFIG_KOWALSKI_OC
 #ifdef CONFIG_KOWALSKI_MAX_OC
-#define TEGRA_MAX_CLOCK			1456000000
+#define TEGRA_MAX_CLOCK			1500000000
 #else
 #define TEGRA_MAX_CLOCK			1200000000
 #endif //CONFIG_KOWALSKI_MAX_OC
@@ -1958,11 +1958,11 @@ static struct clk tegra_pll_u = {
 
 static struct clk_pll_freq_table tegra_pll_x_freq_table[] = {
 #if defined(CONFIG_KOWALSKI_OC) && defined(CONFIG_KOWALSKI_MAX_OC)
-	/* 1.456 GHz */
-	{ 12000000, 1456000000,  728,  6, 1, 12},
-	{ 13000000, 1456000000,  896,  8, 1, 12},
-	{ 19200000, 1456000000,  910, 12, 1,  8},
-	{ 26000000, 1456000000,  896, 16, 1, 12},
+	/* 1.500 GHz */
+	{ 12000000, 1500000000,  875,  7, 1, 12},
+	{ 13000000, 1500000000,  923,  8, 1, 12},
+	{ 19200000, 1500000000,  625,  8, 1,  8},
+	{ 26000000, 1500000000,  750, 13, 1, 12},
 
 	/* 1.404 GHz */
 	{ 12000000, 1404000000,  936,  8, 1, 12},
@@ -1970,23 +1970,11 @@ static struct clk_pll_freq_table tegra_pll_x_freq_table[] = {
 	{ 19200000, 1404000000,  585,  8, 1,  8},
 	{ 26000000, 1404000000,  972, 18, 1, 12},
 
-	/* 1.352 GHz */
-	{ 12000000, 1352000000,  676,  6, 1, 12},
-	{ 13000000, 1352000000,  936,  9, 1, 12},
-	{ 19200000, 1352000000,  845, 12, 1,  8},
-	{ 26000000, 1352000000,  988, 19, 1, 12},
-
 	/* 1.300 GHz */
 	{ 12000000, 1300000000, 650,  6,  1, 12},
 	{ 13000000, 1300000000, 1000, 10, 1, 12},
 	{ 19200000, 1300000000, 812,  12,  1, 8},
 	{ 26000000, 1300000000, 650,  13, 1, 12},
-
-	/* 1.248 GHz */
-	{ 12000000, 1248000000,  624,  6, 1, 12},
-	{ 13000000, 1248000000,  960, 10, 1, 12},
-	{ 19200000, 1248000000,  650, 10, 1,  8},
-	{ 26000000, 1248000000,  960, 20, 1, 12},
 #endif
 
 #if defined(CONFIG_MACH_BSSQ) || defined(CONFIG_KOWALSKI_OC)
@@ -2747,7 +2735,7 @@ static struct cpufreq_frequency_table freq_table_1p2GHz[] = {
 };
 
 #ifdef CONFIG_KOWALSKI_MAX_OC
-static struct cpufreq_frequency_table freq_table_1p4GHz[] = {
+static struct cpufreq_frequency_table freq_table_1p5GHz[] = {
 	{ 0, 216000 },
 	{ 1, 312000 },
 	{ 2, 456000 },
@@ -2758,12 +2746,10 @@ static struct cpufreq_frequency_table freq_table_1p4GHz[] = {
 	{ 7, 1000000 },
 	{ 8, 1100000 },
 	{ 9, 1200000 },
-	{10, 1248000 },
 	{11, 1300000 },
-	{12, 1352000 },
-	{13, 1404000 },
-	{14, 1456000 },
-	{15, CPUFREQ_TABLE_END },
+	{12, 1404000 },
+	{13, 1500000 },
+	{14, CPUFREQ_TABLE_END },
 };
 #endif
 
@@ -2772,7 +2758,7 @@ static struct tegra_cpufreq_table_data cpufreq_tables[] = {
 	{ freq_table_1p0GHz, 2, 6 },
 	{ freq_table_1p2GHz, 2, 7 },
 #if defined(CONFIG_KOWALSKI_OC) && defined(CONFIG_KOWALSKI_MAX_OC)
-	{ freq_table_1p4GHz, 2, 6 },
+	{ freq_table_1p5GHz, 2, 6 },
 #endif // CONFIG_KOWALSKI_MAX_OC
 };
 
