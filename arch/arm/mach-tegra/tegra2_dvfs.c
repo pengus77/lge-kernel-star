@@ -51,8 +51,7 @@ static const int core_millivolts[MAX_DVFS_FREQS] =
 		1300,
 		1350,
 		1400,
-		1450,
-		1500
+		1450
 	};
 #else
 	{
@@ -80,11 +79,9 @@ static const int cpu_millivolts[MAX_DVFS_FREQS] =
 		1000 /* 1000 MHz */,
 		1075 /* 1100 MHz */,
 		1125 /* 1200 MHz */,
-		1150 /* 1248 MHz */,
 		1200 /* 1300 MHz */,
-		1250 /* 1352 MHz */,
-		1300 /* 1404 MHz */,
-		1350 /* 1456 MHz */
+		1275 /* 1400 MHz */,
+		1350 /* 1500 MHz */
 	};
 #else
 	{
@@ -123,7 +120,7 @@ static const int cpu_millivolts[MAX_DVFS_FREQS] =
 static const int cpu_speedo_nominal_millivolts[] =
 /* spedo_id  0,    1,    2 */
 #if defined(CONFIG_KOWALSKI_OC) && defined(CONFIG_KOWALSKI_MAX_OC)
-	{ 1100, 1175, 1125 };
+	{ 1100, 1250, 1125 };
 #else
 	{ 1100, 1025, 1125 };
 #endif
@@ -131,7 +128,7 @@ static const int cpu_speedo_nominal_millivolts[] =
 static const int core_speedo_nominal_millivolts[] =
 /* spedo_id  0,    1,    2 */
 #if defined(CONFIG_KOWALSKI_OC) && defined(CONFIG_KOWALSKI_MAX_OC)
-	{ 1225, 1275, 1300 };
+	{ 1225, 1300, 1300 };
 #else
 	{ 1225, 1225, 1300 };
 #endif
@@ -161,8 +158,8 @@ static struct dvfs_rail tegra2_dvfs_rail_vdd_core = {
 	.reg_id = "vdd_core",
 	.min_millivolts = 950,
 #if defined(CONFIG_KOWALSKI_OC) && defined(CONFIG_KOWALSKI_MAX_OC)
-	.max_millivolts = 1500,
-	.nominal_millivolts = 1400,
+	.max_millivolts = 1450,
+	.nominal_millivolts = 1350,
 #else
 	.max_millivolts = 1300,
 	.nominal_millivolts = 1225,
@@ -174,8 +171,8 @@ static struct dvfs_rail tegra2_dvfs_rail_vdd_aon = {
 	.reg_id = "vdd_aon",
 	.min_millivolts = 950,
 #if defined(CONFIG_KOWALSKI_OC) && defined(CONFIG_KOWALSKI_MAX_OC)
-	.max_millivolts = 1500,
-	.nominal_millivolts = 1400,
+	.max_millivolts = 1450,
+	.nominal_millivolts = 1350,
 #else
 	.max_millivolts = 1300,
 	.nominal_millivolts = 1225,
@@ -267,8 +264,8 @@ static struct dvfs_rail *tegra2_dvfs_rails[] = {
 
 #if defined(CONFIG_KOWALSKI_OC) && defined(CONFIG_KOWALSKI_MAX_OC)
 static struct dvfs dvfs_init[] = {
-	CPU_DVFS("cpu", 1, 0, MHZ, 216, 312, 456, 608, 760, 816, 912, 1000, 1100, 1200, 1248, 1300, 1352, 1404, 1456),
-	CPU_DVFS("cpu", 1, 1, MHZ, 216, 312, 456, 608, 760, 816, 912, 1000, 1100, 1200, 1248, 1300, 1352, 1404, 1456),
+	CPU_DVFS("cpu", 1, 0, MHZ, 216, 312, 456, 608, 760, 816, 912, 1000, 1100, 1200, 1300, 1404, 1500),
+	CPU_DVFS("cpu", 1, 1, MHZ, 216, 312, 456, 608, 760, 816, 912, 1000, 1100, 1200, 1300, 1404, 1500),
 
 #if defined(CONFIG_MACH_BSSQ)
 	CORE_DVFS("emc",     -1, 1, KHZ, 47500,  126668, 380000, 380000, 380000, 380000, 760000, 760000, 760000, 760000),
@@ -333,7 +330,7 @@ static struct dvfs dvfs_init[] = {
 	CORE_DVFS("usb2",    -1, 1, KHZ, 0,      0,      480000, 480000, 480000, 480000, 480000),
 	CORE_DVFS("usb3",    -1, 1, KHZ, 0,      0,      480000, 480000, 480000, 480000, 480000),
 	CORE_DVFS("pcie",    -1, 1, KHZ, 0,      0,      0,      250000, 250000, 250000, 250000),
-	CORE_DVFS("dsia",     -1, 1, KHZ, 100000, 100000, 100000, 500000, 500000, 500000, 500000),
+	CORE_DVFS("dsia",    -1, 1, KHZ, 100000, 100000, 100000, 500000, 500000, 500000, 500000),
 	CORE_DVFS("tvo",     -1, 1, KHZ, 0,      0,      0,      250000, 250000, 250000, 250000),
 
 	/*
