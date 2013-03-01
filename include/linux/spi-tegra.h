@@ -47,6 +47,6 @@ struct tegra_spi_device_controller_data {
         int cs_hold_clk_count;
 };
 
-bool spi_tegra_is_suspend(struct spi_device *spi);
+extern bool spi_tegra_is_suspend(struct spi_device *spi);
 
 #endif /* _LINUX_SPI_TEGRA_H */
