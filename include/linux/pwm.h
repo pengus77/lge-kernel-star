@@ -28,4 +28,9 @@ int pwm_enable(struct pwm_device *pwm);
  */
 void pwm_disable(struct pwm_device *pwm);
 
+/*
+ * pwm_enabled - check if PWM is enabled
+ */
+bool pwm_enabled(struct pwm_device *pwm);
+
 #endif /* __LINUX_PWM_H */

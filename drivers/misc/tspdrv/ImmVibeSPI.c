@@ -107,7 +107,8 @@ static void vib_generatePWM(int on)
         pwm_enable(nv_vib_pwm);
 	}
 	else {
-        pwm_disable(nv_vib_pwm);
+		if (pwm_enabled(nv_vib_pwm))
+			pwm_disable(nv_vib_pwm);
 	}
 }
 
@@ -195,7 +196,9 @@ IMMVIBESPIAPI VibeStatus ImmVibeSPI_ForceOut_Initialize( void)
 
 //   	ImmVibeSPI_ForceOut_AmpDisable( 0 );	
     gpio_set_value(nv_vibe_gpio_en, 0);
-    pwm_disable(nv_vib_pwm);
+
+    if (pwm_enabled(nv_vib_pwm))
+    	pwm_disable(nv_vib_pwm);
 
     return VIBE_S_SUCCESS;
 
@@ -264,7 +267,9 @@ IMMVIBESPIAPI VibeStatus ImmVibeSPI_ForceOut_SetSamples(VibeUInt8 nActuatorIndex
     if (nForce == 0)
     {        
         nv_vibrator_gpio_enable(0);
-        pwm_disable(nv_vib_pwm);        
+
+        if (pwm_enabled(nv_vib_pwm))
+        	pwm_disable(nv_vib_pwm);
     }    
     else
     {

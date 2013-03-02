@@ -121,6 +121,16 @@ int pwm_enable(struct pwm_device *pwm)
 }
 EXPORT_SYMBOL(pwm_enable);
 
+bool pwm_enabled(struct pwm_device *pwm)
+{
+	bool enabled = false;
+	mutex_lock(&pwm_lock);
+	enabled = pwm->clk_enb;
+	mutex_unlock(&pwm_lock);
+	return enabled;
+}
+EXPORT_SYMBOL(pwm_enabled);
+
 void pwm_disable(struct pwm_device *pwm)
 {
 	mutex_lock(&pwm_lock);

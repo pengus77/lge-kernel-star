@@ -24,34 +24,29 @@
 #include <linux/clk.h>
 
 struct spi_clk_parent {
-	const char *name;
-	struct clk *parent_clk;
-	unsigned long fixed_clk_rate;
+        const char *name;
+        struct clk *parent_clk;
+        unsigned long fixed_clk_rate;
 };
 
 struct tegra_spi_platform_data {
-	bool is_dma_based;
-	int max_dma_buffer;
-	bool is_clkon_always;
-	unsigned int max_rate;
-	struct spi_clk_parent *parent_clk_list;
-	int  parent_clk_count;
+        bool is_dma_based;
+        int max_dma_buffer;
+        bool is_clkon_always;
+        unsigned int max_rate;
+        struct spi_clk_parent *parent_clk_list;
+        int  parent_clk_count;
 };
 
 /* Controller data from device to pass some info like
  * hw based chip select can be used or not and if yes
  * then CS hold and setup time. */
 struct tegra_spi_device_controller_data {
-	bool is_hw_based_cs;
-	int cs_setup_clk_count;
-	int cs_hold_clk_count;
+        bool is_hw_based_cs;
+        int cs_setup_clk_count;
+        int cs_hold_clk_count;
 };
 
-//20110721 ws.yang@lge.com add to check suspend of  ifx_n721_spi.c [S]
 extern bool spi_tegra_is_suspend(struct spi_device *spi);
-//20110721 ws.yang@lge.com add to check suspend of  ifx_n721_spi.c [E]
-//20111101 ws.yang@lge.com .. to test
-extern bool spi_tegra_suspend_failed(struct spi_device *spi);
-// 20110628 youngjin.yoo@lge.com added spi control function [E]
 
 #endif /* _LINUX_SPI_TEGRA_H */

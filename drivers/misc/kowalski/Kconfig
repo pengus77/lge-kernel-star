@@ -32,6 +32,11 @@ config KOWALSKI_OC
 	depends on TEGRA_CPU_DVFS && TEGRA_CORE_DVFS
 	default n
 
+config KOWALSKI_MAX_OC
+	bool "Enable Extreme Overclocking (above 1.25)"
+	depends on KOWALSKI_OC
+	default n
+
 config KOWALSKI_UV
 	bool "Enable Voltage Control"
 	depends on TEGRA_CPU_DVFS && TEGRA_CORE_DVFS
