@@ -2746,10 +2746,10 @@ static struct cpufreq_frequency_table freq_table_1p5GHz[] = {
 	{ 7, 1000000 },
 	{ 8, 1100000 },
 	{ 9, 1200000 },
-	{11, 1300000 },
-	{12, 1404000 },
-	{13, 1500000 },
-	{14, CPUFREQ_TABLE_END },
+	{10, 1300000 },
+	{11, 1404000 },
+	{12, 1500000 },
+	{13, CPUFREQ_TABLE_END },
 };
 #endif
 
