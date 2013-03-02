@@ -1938,7 +1938,8 @@ dhd_ioctl_entry(struct net_device *net, struct ifreq *ifr, int cmd)
 		} else {
 		*/
 		{
-			if (!(buf = (char*)MALLOC(dhd->pub.osh, buflen))) {
+			buf = kmalloc(buflen, GFP_ATOMIC);
+			if (!buf) {
 				bcmerror = -BCME_NOMEM;
 				goto done;
 			}
@@ -1993,13 +1994,9 @@ dhd_ioctl_entry(struct net_device *net, struct ifreq *ifr, int cmd)
 	if (is_set_key_cmd) {
 		dhd_wait_pend8021x(net);
 	}
-	WAKE_LOCK_INIT(&dhd->pub, WAKE_LOCK_IOCTL, "dhd_ioctl_entry");
-	WAKE_LOCK(&dhd->pub, WAKE_LOCK_IOCTL);
 
 	bcmerror = dhd_prot_ioctl(&dhd->pub, ifidx, (wl_ioctl_t *)&ioc, buf, buflen);
 
-	WAKE_UNLOCK(&dhd->pub, WAKE_LOCK_IOCTL);
-	WAKE_LOCK_DESTROY(&dhd->pub, WAKE_LOCK_IOCTL);
 	if ((bcmerror == -ETIMEDOUT) || ((dhd->pub.busstate == DHD_BUS_DOWN) && \
 			(!dhd->pub.dongle_reset))) {
 		DHD_ERROR(("%s: Event HANG send up\n", __FUNCTION__));
@@ -2011,8 +2008,12 @@ done:
 			bcmerror = -EFAULT;
 	}
 
-	if (buf)
-		MFREE(dhd->pub.osh, buf, buflen);
+	kfree(buf);
+
+	if (bcmerror > 0)
+		bcmerror = 0;
+	else if (bcmerror < BCME_LAST)
+		bcmerror = BCME_ERROR;
 
 	return OSL_ERROR(bcmerror);
 }
