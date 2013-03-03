@@ -86,7 +86,7 @@ static const int cpu_millivolts[MAX_DVFS_FREQS] =
 #else
 	{
 		750 /* 216 MHz */,
-		875 /* 312 MHz */,
+		775 /* 312 MHz */,
 		825 /* 456 MHz */,
 		875 /* 608 MHz */,
 		925 /* 760 MHz */,
