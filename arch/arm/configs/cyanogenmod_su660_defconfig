@@ -338,6 +338,7 @@ CONFIG_STAR_TOUCH_LED=y
 # Touch driver Selection
 #
 CONFIG_TOUCHSCREEN_TEGRA_STAR=y
+CONFIG_ONETOUCHSCREEN_TEGRA_STAR=y
 
 #
 # Camera driver Selection
