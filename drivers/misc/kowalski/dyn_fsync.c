@@ -33,6 +33,20 @@ static DEFINE_MUTEX(fsync_mutex);
 bool dyn_fsync_early_suspend = false;
 bool dyn_fsync_active = false;
 
+static void dyn_fsync_flush(void)
+{
+	mutex_lock(&fsync_mutex);
+	if (dyn_fsync_active) {
+		pr_info("%s: flushing all outstanding buffers\n", __FUNCTION__);
+
+		dyn_fsync_early_suspend = true;
+		wakeup_flusher_threads(0);
+		sync_filesystems(0);
+		sync_filesystems(1);
+	}
+	mutex_unlock(&fsync_mutex);
+}
+
 static ssize_t dyn_fsync_active_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	return sprintf(buf, "%u\n", (dyn_fsync_active ? 1 : 0));
@@ -50,6 +64,7 @@ static ssize_t dyn_fsync_active_store(struct kobject *kobj, struct kobj_attribut
 		else if (data == 0) {
 			pr_info("%s: dyanamic fsync disabled\n", __FUNCTION__);
 			dyn_fsync_active = false;
+			dyn_fsync_flush();
 		}
 		else
 			pr_info("%s: bad value: %u\n", __FUNCTION__, data);
@@ -92,20 +107,6 @@ static struct attribute_group dyn_fsync_active_attr_group =
 	};
 
 static struct kobject *dyn_fsync_kobj;
-
-static void dyn_fsync_flush(void)
-{
-	mutex_lock(&fsync_mutex);
-	if (dyn_fsync_active) {
-		pr_info("%s: flushing all outstanding buffers\n", __FUNCTION__);
-
-		dyn_fsync_early_suspend = true;
-		wakeup_flusher_threads(0);
-		sync_filesystems(0);
-		sync_filesystems(1);
-	}
-	mutex_unlock(&fsync_mutex);
-}
 
 static void dyn_fsync_suspend(struct early_suspend *h)
 {

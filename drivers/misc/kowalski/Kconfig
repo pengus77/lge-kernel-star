@@ -55,4 +55,8 @@ config KOWALSKI_AUTO_HOTPLUG
 	!CPU_FREQ_GOV_HOTPLUG
 	default y
 
+config KOWALSKI_DYNAMIC_FSYNC
+	bool "Disable FSync when screen is on and flush buffers when it's off"
+	default y
+
 endif # KOWALSKI
