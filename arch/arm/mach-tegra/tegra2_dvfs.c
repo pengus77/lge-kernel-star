@@ -69,32 +69,32 @@ static const int cpu_millivolts[MAX_DVFS_FREQS] =
 #ifdef CONFIG_KOWALSKI_OC
 #ifdef CONFIG_KOWALSKI_MAX_OC
 	{
-		750 /* 216 MHz */,
-		775 /* 312 MHz */,
-		825 /* 456 MHz */,
-		875 /* 608 MHz */,
-		925 /* 760 MHz */,
-		950 /* 816 MHz */,
-		975 /* 912 MHz */,
-		1000 /* 1000 MHz */,
-		1075 /* 1100 MHz */,
-		1150 /* 1200 MHz */,
-		1200 /* 1300 MHz */,
-		1250 /* 1400 MHz */,
-		1300 /* 1500 MHz */
+		750,	/* 216 MHz */
+		780,	/* 312 MHz */
+		830,	/* 456 MHz */
+		870,	/* 608 MHz */
+		900,	/* 760 MHz */
+		930,	/* 816 MHz */
+		980,	/* 912 MHz */
+		1000,	/* 1000 MHz */
+		1080,	/* 1100 MHz */
+		1150,	/* 1200 MHz */
+		1200,	/* 1300 MHz */
+		1250,	/* 1404 MHz */
+		1300	/* 1500 MHz */
 	};
 #else
 	{
-		750 /* 216 MHz */,
-		775 /* 312 MHz */,
-		825 /* 456 MHz */,
-		875 /* 608 MHz */,
-		925 /* 760 MHz */,
-		950 /* 816 MHz */,
-		975 /* 912 MHz */,
-		1000 /* 1000 MHz */,
-		1075 /* 1100 MHz */,
-		1150 /* 1200 MHz */
+		750,	/* 216 MHz */
+		780,	/* 312 MHz */
+		830,	/* 456 MHz */
+		870,	/* 608 MHz */
+		930,	/* 760 MHz */
+		950,	/* 816 MHz */
+		980,	/* 912 MHz */
+		1000,	/* 1000 MHz */
+		1080,	/* 1100 MHz */
+		1150	/* 1200 MHz */
 	};
 #endif // CONFIG_KOWALSKI_OC
 #else
@@ -139,7 +139,7 @@ static const int core_speedo_nominal_millivolts[] =
 static struct dvfs_rail tegra2_dvfs_rail_vdd_cpu = {
 	.reg_id = "vdd_cpu",
 #ifdef CONFIG_KOWALSKI_OC
-	.min_millivolts = 675,
+	.min_millivolts = 700,
 #ifdef CONFIG_KOWALSKI_MAX_OC
 	.max_millivolts = 1350,
 	.nominal_millivolts = 1300,
@@ -186,8 +186,8 @@ static struct dvfs_rail tegra2_dvfs_rail_vdd_aon = {
 static int tegra2_dvfs_rel_vdd_cpu_vdd_core(struct dvfs_rail *vdd_cpu,
 	struct dvfs_rail *vdd_core)
 {
-#ifdef CONFIG_KOWALSKI_OC
-	int step = 50; /* was 120 mV */
+#ifdef CONFIG_KOWALSKI_UV
+	int step = 50;
 #else
 	int step = 120;
 #endif
@@ -264,6 +264,7 @@ static struct dvfs_rail *tegra2_dvfs_rails[] = {
 
 #if defined(CONFIG_KOWALSKI_OC) && defined(CONFIG_KOWALSKI_MAX_OC)
 static struct dvfs dvfs_init[] = {
+							/* 750, 775, 825, 875, 900, 925, 975, 1000, 1075, 1150, 1200, 1250, 1300, 1350 */
 	CPU_DVFS("cpu", 1, 0, MHZ, 216, 312, 456, 608, 760, 816, 912, 1000, 1100, 1200, 1300, 1404, 1500),
 	CPU_DVFS("cpu", 1, 1, MHZ, 216, 312, 456, 608, 760, 816, 912, 1000, 1100, 1200, 1300, 1404, 1500),
 

@@ -20,9 +20,17 @@
 #include <linux/delay.h>
 #endif
 
+#if defined(CONFIG_MACH_STAR) && defined(CONFIG_KOWALSKI_UV)
+#define MIN_UV_VALUE 70
+#define MAX_UV_VALUE 140
+#else
+#define MIN_UV_VALUE 77
+#define MAX_UV_VALUE 140
+#endif
+
 #if defined (CONFIG_MACH_STAR) || defined (CONFIG_MACH_BSSQ)
-#define VOLTAGE_TO_VALUE(v) (((v) - 770000) / 10000)
-#define VALUE_TO_VOLTAGE(val) ((val) * 10000 + 770000)
+#define VOLTAGE_TO_VALUE(v) (((v) - (MIN_UV_VALUE*10000)) / 10000)
+#define VALUE_TO_VOLTAGE(val) ((val) * 10000 + (MIN_UV_VALUE*10000))
 #else
 #define VOLTAGE_TO_VALUE(v) (((v) - 750000) / 10000)
 #define VALUE_TO_VOLTAGE(val) ((val) * 10000 + 750000)
@@ -55,22 +63,24 @@ static const int max8952_mode0_voltages[] = {
 };
 
 static const int max8952_mode1_voltages[] = {    
-	// Refer dvfs table for vdd_cpu
-	// In SU660, we use only MODE1
-	750000, 775000, 800000, 825000, 850000, 875000, 900000, 925000, 950000, 975000, 
-	1000000, 1025000, 1050000, 1100000, 1125000,
-	1150000, 1200000, 1225000, 1250000, 1275000, 1300000, 1325000, 1350000, 1400000,
-//	770000, 780000, 800000,830000,850000,880000,900000,930000,950000,980000,1000000,
-//	1030000,1050000,1100000,1130000
+#ifdef CONFIG_KOWALSKI_OC
+	700000,  730000,  750000,  780000,  800000,  830000,  850000,  870000, 900000, 930000, 950000, 980000,
+	1000000, 1030000, 1050000, 1080000, 1100000, 1130000, 1150000, 1180000,
+#ifdef CONFIG_KOWALSKI_MAX_OC
+	1200000, 1225000, 1250000, 1275000, 1300000, 1350000
+#endif
+#else
+	770000,  780000,  800000,  830000,  850000, 880000, 900000, 930000, 950000, 980000,
+	1000000, 1030000, 1050000, 1100000, 1130000
+#endif
 };
 
 static const int max8952_mode2_voltages[] = {
 	770000, 780000, 1280000, 1290000, 1300000, 1390000, 1400000
 };
 
-/* set value of voltage table as close as to what dvfs requests for cpu voltage */
 static const int max8952_mode3_voltages[] = {
-	770000, 780000, 1280000, 1290000, 1300000, 1390000, 1400000	
+	770000, 780000, 1280000, 1290000, 1300000, 1390000, 1400000
 };
 #elif defined (CONFIG_MACH_BSSQ)
 static const int max8952_mode0_voltages[] = {
@@ -302,15 +312,12 @@ static int max8952_set_voltage(struct regulator_dev *rdev, int min_uV,
 #endif
 
 // 20110703 hyokmin.kwon@lge.com Set voltage as close as the min input [S]
-#if defined (CONFIG_MACH_STAR) || defined (CONFIG_MACH_BSSQ)
+#if 0 // defined (CONFIG_MACH_STAR) || defined (CONFIG_MACH_BSSQ)
 
-//	printk(">>>>>>>>>>>>>>>>> max8952_set_voltage is callled\n");
-
-	if(new_min_10mV >= 77 && new_min_10mV <= 140)
+	if(new_min_10mV >= MIN_UV_VALUE && new_min_10mV <= MAX_UV_VALUE)
 	{
-		val = new_min_10mV - 77; // Not using table
-//		printk(">>>>>>>>>>>>>>>>> max8952_set_voltage , min_uV = %d , max_uV = %d\n", min_uV, max_uV);
-//		printk(">>>>>>>>>>>>>>>>> max8952_set_voltage , voltage = %d\n", val*10000+770000);
+		val = new_min_10mV - MIN_UV_VALUE; // Not using table
+		// printk(">>>>>>>>>>>>>>>>> %s: min_uV = %d, max_uV = %d, current_voltage = %d\n", __FUNCTION__, min_uV, max_uV, val*10000 + MIN_UV_VALUE*10000);
 #if defined (CONFIG_MACH_BSSQ) || defined (CONFIG_MACH_STAR)
 		return max8952_set_bits(max8952, reg->reg_base, MAX8952_MASK_OUTMODE, val, false);
 #else
@@ -318,13 +325,11 @@ static int max8952_set_voltage(struct regulator_dev *rdev, int min_uV,
 #endif
 	}
 
-	if(new_min_10mV < 77)
+	if(new_min_10mV < MIN_UV_VALUE)
 	{
 		new_max_10mV = max_uV/10000;
-		if(new_max_10mV >= 77) // Valid case
+		if(new_max_10mV >= MIN_UV_VALUE) // Valid case
 		{
-//			printk(">>>>>>>>>>>>>>>>> max8952_set_voltage , min_uV = %d , max_uV = %d\n", min_uV, max_uV);
-//			printk(">>>>>>>>>>>>>>>>> max8952_set_voltage , voltage = %d\n", 770000);
 #if defined (CONFIG_MACH_BSSQ) || defined (CONFIG_MACH_STAR)
 			return max8952_set_bits(max8952, reg->reg_base, MAX8952_MASK_OUTMODE, 0x00, false);
 #else
@@ -342,7 +347,7 @@ static int max8952_set_voltage(struct regulator_dev *rdev, int min_uV,
 			return -EDOM; // Just set voltage as close as the input and return error
 		}
 	}
-	else if(new_min_10mV > 140)
+	else if(new_min_10mV > MAX_UV_VALUE)
 	{
 		printk("[VDD_CPU] Out of high boundary in max8952_set_voltage , min_uV = %d , max_uV = %d\n", min_uV, max_uV);
 #if defined (CONFIG_MACH_BSSQ) || defined (CONFIG_MACH_STAR)
