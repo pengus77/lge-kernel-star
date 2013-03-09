@@ -582,17 +582,17 @@ static int star_panel_postpoweron(void)
 
 	if(bAndroidBootMode)
 	{		
-		printk("\n AndroidBootMode Now (return star_panel_postpoweron)...... \n");
+		// printk("\n AndroidBootMode Now (return star_panel_postpoweron)...... \n");
 		return 0;
 	}
 #endif
 	if(is_lcd_panel_poweron) // already power on
 	{
-		printk("already power on\n");
+		// printk("already power on\n");
 		return 0;
 	}
 
-	printk("\n star_panel_postpoweron...... \n");
+	// printk("\n star_panel_postpoweron...... \n");
 #if defined(CONFIG_MACH_STAR)
 				g_is_suspend=1;
 #endif
@@ -601,7 +601,7 @@ static int star_panel_postpoweron(void)
 
 	if(MARKED_ID /*gpio_get_value(STAR_LCD_MARKED_ID)*/)
 	{		
-		printk("\n star LGD star_panel_postpoweron...... \n");
+		// printk("\n star LGD star_panel_postpoweron...... \n");
 // ???
 		gpio_set_value(STAR_HITACHI_LCD_CS, 0);
 		gpio_set_value(STAR_HITACHI_LCD_CS, 1);
@@ -623,7 +623,7 @@ static int star_panel_postpoweron(void)
 		    if (IS_ERR(reg_lcd_vdd)) {
 		        pr_err("Failed to get vcc_lcd_2v8\n");
 	    	}
-			regulator_set_voltage(reg_lcd_vdd, 3100000, 3100000);
+			regulator_set_voltage(reg_lcd_vdd, 2800000, 2800000);
 	    }
 
 		if(!regulator_is_enabled(reg_lcd_vdd))
@@ -647,7 +647,7 @@ static int star_panel_postpoweron(void)
 	}
 	else
 	{	
-		printk("\n star Hitach star_panel_postpoweron...... \n");
+		// printk("\n star Hitach star_panel_postpoweron...... \n");
 
 		if (!reg_lcd_1v8) {
 			reg_lcd_1v8 = regulator_get_exclusive(NULL, "vcc_lcd_1v8");
@@ -665,7 +665,7 @@ static int star_panel_postpoweron(void)
 		    if (IS_ERR(reg_lcd_vdd)) {
 		        pr_err("Failed to get vcc_lcd_2v8\n");
 	    	}
-			regulator_set_voltage(reg_lcd_vdd, 2800000, 2800000);
+			regulator_set_voltage(reg_lcd_vdd, 2500000, 2500000);
 	    }
 
 		if(!regulator_is_enabled(reg_lcd_vdd))
@@ -720,11 +720,11 @@ static int star_panel_postsuspend(void)
 #endif
 	if(is_lcd_panel_poweroff)	//already power off
 	{
-		printk("already power off.\n");
+		// printk("already power off.\n");
 		return 0;
 	}
 
-	printk("\n star_panel_postsuspend...... \n");
+	// printk("\n star_panel_postsuspend...... \n");
 
 	gpio_direction_output(STAR_HITACHI_LCD_CS, 1);
 	tegra_gpio_enable(STAR_HITACHI_LCD_CS);
@@ -742,13 +742,13 @@ static int star_panel_postsuspend(void)
 
 	if(MARKED_ID /*gpio_get_value(STAR_LCD_MARKED_ID)*/)
 	{
-		printk("\n star LGD panel_postsuspend...... \n");
+		// printk("\n star LGD panel_postsuspend...... \n");
 		hitachi_lcd_write( lgd_lcd_standby_data,
 				ARRAY_SIZE(lgd_lcd_standby_data));
 	}
 	else
 	{
-		printk("\n star Hitachi panel_postsuspend...... \n");		
+		// printk("\n star Hitachi panel_postsuspend...... \n");
 
 		hitachi_lcd_write(hitachi_lcd_standby_data,
 				ARRAY_SIZE(hitachi_lcd_standby_data));
