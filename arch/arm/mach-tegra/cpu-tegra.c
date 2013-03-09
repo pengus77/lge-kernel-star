@@ -768,12 +768,13 @@ _out:
 static int tegra_pm_notify(struct notifier_block *nb, unsigned long event,
 	void *dummy)
 {
-	mutex_lock(&tegra_cpu_lock);
-
 #ifdef CONFIG_KOWALSKI_CPU_SUSPEND_FREQ_LIMIT
 	extern unsigned int kowalski_cpu_suspend_max_freq;
 	static unsigned int stored_cpu_user_cap = 0;
 #endif
+	unsigned int freq;
+
+	mutex_lock(&tegra_cpu_lock);
 
 	if (event == PM_SUSPEND_PREPARE) {
 		is_suspended = true;
@@ -797,7 +798,6 @@ static int tegra_pm_notify(struct notifier_block *nb, unsigned long event,
 			stored_cpu_user_cap = 0;
 		}
 #endif
-		unsigned int freq;
 		is_suspended = false;
 		tegra_cpu_edp_init(true);
 		tegra_cpu_set_speed_cap(&freq);
