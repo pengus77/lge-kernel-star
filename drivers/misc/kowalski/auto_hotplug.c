@@ -27,12 +27,15 @@
 #include <linux/cpu.h>
 #include <linux/workqueue.h>
 #include <linux/sched.h>
-#include <linux/suspend.h>
+#include <linux/earlysuspend.h>
 
 #define CPUS_AVAILABLE		num_possible_cpus()
 
 struct delayed_work hotplug_online_all_work;
 struct delayed_work hotplug_offline_all_work;
+
+unsigned char flags;
+#define EARLYSUSPEND_ACTIVE	(1 << 0)
 
 static void __cpuinit hotplug_online_all_work_fn(struct work_struct *work)
 {
@@ -54,19 +57,23 @@ static void hotplug_offline_all_work_fn(struct work_struct *work)
 	}
 }
 
-static int kowalski_pm_notify(struct notifier_block *nb, unsigned long event, void *dummy) {
-	if (event == PM_SUSPEND_PREPARE) {
-		if (num_online_cpus() > 1) {
-			schedule_delayed_work_on(0, &hotplug_offline_all_work, HZ);
-		}
-	} else if (event == PM_POST_SUSPEND) {
+static void kowalski_hp_resume(struct early_suspend *handler){
+	if (flags & EARLYSUSPEND_ACTIVE) {
 		schedule_delayed_work_on(0, &hotplug_online_all_work, HZ);
+		flags &= ~EARLYSUSPEND_ACTIVE;
 	}
-	return NOTIFY_OK;
 }
 
-static struct notifier_block kowalski_hp_pm_notifier = {
-	.notifier_call = kowalski_pm_notify,
+static void kowalski_hp_suspend(struct early_suspend *handler) {
+	if (num_online_cpus() > 1 && !(flags & EARLYSUSPEND_ACTIVE)) {
+		schedule_delayed_work_on(0, &hotplug_offline_all_work, HZ);
+		flags |= EARLYSUSPEND_ACTIVE;
+	}
+}
+
+static struct early_suspend kowalski_hp_suspend_handler = {
+	.suspend = kowalski_hp_suspend,
+	.resume = kowalski_hp_resume,
 };
 
 int __init auto_hotplug_init(void)
@@ -79,7 +86,7 @@ int __init auto_hotplug_init(void)
 	INIT_DELAYED_WORK_DEFERRABLE(&hotplug_online_all_work, hotplug_online_all_work_fn);
 	INIT_DELAYED_WORK_DEFERRABLE(&hotplug_offline_all_work, hotplug_offline_all_work_fn);
 
-	register_pm_notifier(&kowalski_hp_pm_notifier);
+	register_early_suspend(&kowalski_hp_suspend_handler);
 
 	return 0;
 }
