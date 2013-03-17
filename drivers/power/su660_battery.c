@@ -1206,7 +1206,7 @@ static void battery_work(struct work_struct *work)
 
 	DBG();
 
-	battery_update_changes(batt_info, 0);
+	battery_update_changes(batt_info, 1);
 	queue_delayed_work(batt_info->battery_workqueue, &batt_info->star_monitor_work, batt_info->polling_interval);
 }
 
