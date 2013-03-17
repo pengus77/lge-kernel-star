@@ -1121,7 +1121,7 @@ static int cpufreq_add_dev(struct sys_device *sys_dev)
 	INIT_WORK(&policy->update, handle_update);
 
 	/* Set governor before ->init, so that driver could check it */
-#ifdef CONFIG_HOTPLUG_CPU
+#ifdef CONFIG_KOWALSKI_AUTO_HOTPLUG
 	struct cpufreq_policy *cp;
 	for_each_online_cpu(sibling) {
 		cp = per_cpu(cpufreq_cpu_data, sibling);
