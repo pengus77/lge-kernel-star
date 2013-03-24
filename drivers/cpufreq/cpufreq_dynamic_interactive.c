@@ -607,30 +607,6 @@ static void cpufreq_dynamic_interactive_boost(void)
 		wake_up_process(speedchange_task);
 }
 
-static ssize_t show_hispeed_freq(struct kobject *kobj,
-				 struct attribute *attr, char *buf)
-{
-	return sprintf(buf, "%llu\n", hispeed_freq);
-}
-
-static ssize_t store_hispeed_freq(struct kobject *kobj,
-				  struct attribute *attr, const char *buf,
-				  size_t count)
-{
-	int ret;
-	u64 val;
-
-	ret = strict_strtoull(buf, 0, &val);
-	if (ret < 0)
-		return ret;
-	hispeed_freq = val;
-	return count;
-}
-
-static struct global_attr hispeed_freq_attr = __ATTR(hispeed_freq, 0644,
-		show_hispeed_freq, store_hispeed_freq);
-
-
 static ssize_t show_go_hispeed_load(struct kobject *kobj,
 				     struct attribute *attr, char *buf)
 {
@@ -899,7 +875,6 @@ static struct global_attr low_power_rate_attr = __ATTR(low_power_rate,
 
 
 static struct attribute *dynamic_interactive_attributes[] = {
-	&hispeed_freq_attr.attr,
 	&go_hispeed_load_attr.attr,
 	&above_hispeed_delay.attr,
 	&min_sample_time_attr.attr,
@@ -915,7 +890,7 @@ static struct attribute *dynamic_interactive_attributes[] = {
 
 static struct attribute_group dynamic_interactive_attr_group = {
 	.attrs = dynamic_interactive_attributes,
-	.name = "dynamic_interactive",
+	.name = "dyninteractive",
 };
 
 static int cpufreq_dynamic_interactive_idle_notifier(struct notifier_block *nb,
