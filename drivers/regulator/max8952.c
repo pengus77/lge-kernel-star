@@ -20,10 +20,14 @@
 #include <linux/delay.h>
 #endif
 
-#if defined(CONFIG_MACH_STAR) && defined(CONFIG_KOWALSKI_UV)
-#define MIN_UV_VALUE 65
-#define MAX_UV_VALUE 135
-#else
+#if defined(CONFIG_MACH_STAR) && defined(CONFIG_KOWALSKI_UV) && defined(CONFIG_KOWALSKI_OC)
+#define MIN_UV_VALUE 70
+#if defined(CONFIG_KOWALSKI_MAX_OC)
+#define MAX_UV_VALUE 130
+#else //CONFIG_KOWALSKI_OC
+#define MAX_UV_VALUE 120
+#endif
+#else //CONFIG_KOWALSKI_UV
 #define MIN_UV_VALUE 77
 #define MAX_UV_VALUE 140
 #endif
@@ -64,15 +68,14 @@ static const int max8952_mode0_voltages[] = {
 
 static const int max8952_mode1_voltages[] = {    
 #ifdef CONFIG_KOWALSKI_OC
-	650000,  680000,  700000,  730000,  750000,  780000,  800000,  830000,  850000,
-	870000,  900000,  930000,  950000,  980000,
-	1000000, 1030000, 1050000, 1080000, 1100000, 1130000, 1150000, 1180000,
+	700000,  750000,  780000,  830000,  870000,  900000,  930000,  980000,
+	1000000, 1080000, 1150000, 1200000,
 #ifdef CONFIG_KOWALSKI_MAX_OC
-	1200000, 1225000, 1250000, 1275000, 1300000, 1350000
+	1250000, 1300000
 #endif
 #else
-	770000,  780000,  800000,  830000,  850000,  880000,  900000,  930000,  950000,  980000,
-	1000000, 1030000, 1050000, 1100000, 1130000
+	750000, 775000, 800000, 825000, 850000, 875000, 900000, 925000, 950000, 975000,
+	1000000, 1025000, 1050000, 1100000, 1125000
 #endif
 };
 
@@ -313,7 +316,7 @@ static int max8952_set_voltage(struct regulator_dev *rdev, int min_uV,
 #endif
 
 // 20110703 hyokmin.kwon@lge.com Set voltage as close as the min input [S]
-#if 0 // defined (CONFIG_MACH_STAR) || defined (CONFIG_MACH_BSSQ)
+#if defined (CONFIG_MACH_STAR) || defined (CONFIG_MACH_BSSQ)
 
 	if(new_min_10mV >= MIN_UV_VALUE && new_min_10mV <= MAX_UV_VALUE)
 	{
