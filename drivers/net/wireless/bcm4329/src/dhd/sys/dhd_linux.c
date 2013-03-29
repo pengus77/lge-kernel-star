@@ -566,7 +566,7 @@ extern bool kowalski_wifi_max_pm;
 extern bool kowalski_wifi_wake_pm;
 extern bool kowalski_wifi_hotspot_pm;
 
-extern void kowalski_wifi_unregister_dbm_cb();
+extern void kowalski_wifi_unregister_dbm_cb(void);
 
 /*
 extern void start_dbm_timer(void);
@@ -584,6 +584,7 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 	int power_mode = PM_OFF;
 	char iovbuf[32];
 	int bcn_li_dtim = 3;
+	uint roamvar = 1;
 
 	if (dhd && dhd->up) {
 		if (value && dhd->in_suspend) {
@@ -614,6 +615,10 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 				bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim,
 					4, iovbuf, sizeof(iovbuf));
 				dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
+
+				bcm_mkiovar("roam_off", (char *)&roamvar, 4,
+					iovbuf, sizeof(iovbuf));
+				dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
 			}
 		} else {
 			/* Kernel resumed  */
@@ -639,6 +644,11 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 
 				bcm_mkiovar("bcn_li_dtim", (char *)&dhd->dtim_skip,
 					4, iovbuf, sizeof(iovbuf));
+				dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
+
+				roamvar = 0;
+				bcm_mkiovar("roam_off", (char *)&roamvar, 4, iovbuf,
+					sizeof(iovbuf));
 				dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
 			}
 		}
@@ -1315,14 +1325,12 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt)
 	struct sk_buff *skb;
 	uchar *eth;
 	uint len;
-	void * data, *pnext, *save_pktbuf;
+	void * data, *pnext;
 	int i;
 	dhd_if_t *ifp;
 	wl_event_msg_t event;
 
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
-
-	save_pktbuf = pktbuf;
 
 	for (i = 0; pktbuf && i < numpkt; i++, pktbuf = pnext) {
 
@@ -1468,12 +1476,9 @@ dhd_get_stats(struct net_device *net)
 static int
 dhd_watchdog_thread(void *data)
 {
-
 	tsk_ctl_t *tsk = (tsk_ctl_t *)data;
 	dhd_info_t *dhd = (dhd_info_t *)tsk->parent;
-//	dhd_info_t *dhd = (dhd_info_t *)data;
 	WAKE_LOCK_INIT(&dhd->pub, WAKE_LOCK_WATCHDOG, "dhd_watchdog_thread");
-
 	/* This thread doesn't need any user-level access,
 	 * so get rid of all our resources
 	 */
@@ -1484,7 +1489,7 @@ dhd_watchdog_thread(void *data)
 			dhd_watchdog_prio:(MAX_RT_PRIO-1);
 		setScheduler(current, SCHED_FIFO, &param);
 	}
-#endif /* DHD_SCHED */
+#endif
 
 	DAEMONIZE("dhd_watchdog");
 
@@ -1492,7 +1497,6 @@ dhd_watchdog_thread(void *data)
 	complete(&tsk->completed);
 
 	while (1) {
-//		if (down_interruptible (&dhd->watchdog_sem) == 0) {
 		if (down_interruptible (&tsk->sema) == 0) {
 
 			SMP_RD_BARRIER_DEPENDS();
@@ -1522,8 +1526,7 @@ dhd_watchdog_thread(void *data)
 	}
 
 	WAKE_LOCK_DESTROY(&dhd->pub, WAKE_LOCK_WATCHDOG);
-		complete_and_exit(&tsk->completed, 0);
-//	complete_and_exit(&dhd->watchdog_exited, 0);
+	complete_and_exit(&tsk->completed, 0);
 }
 
 static void
