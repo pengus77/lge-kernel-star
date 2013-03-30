@@ -1610,19 +1610,13 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	char iovbuf[WL_EVENTING_MASK_LEN + 12];	/*  Room for "event_msgs" + '\0' + bitvec  */
 	uint up = 0;
 	char buf[128], *ptr;
-#if !defined(CONFIG_LGE_BCM432X_PATCH)
 	uint power_mode = PM_FAST;
-#endif /* CONFIG_LGE_BCM432X_PATCH */
 	uint32 dongle_align = DHD_SDALIGN;
 	uint32 glom = 0;
-#if !defined(CONFIG_LGE_BCM432X_PATCH)
 	uint bcn_timeout = 4;
-#endif /* CONFIG_LGE_BCM432X_PATCH */
 	int scan_assoc_time = 40;
 	int scan_unassoc_time = 40;
-#if !defined(CONFIG_LGE_BCM432X_PATCH)
 	uint32 listen_interval = LISTEN_INTERVAL; /* Default Listen Interval in Beacons */
-#endif /* CONFIG_LGE_BCM432X_PATCH */
 #if defined(SOFTAP)
 	uint dtim = 1;
 #endif 
@@ -1721,12 +1715,10 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 			DHD_ERROR(("%s: country code setting failed\n", __FUNCTION__));
 	}
 
-#if !defined(CONFIG_LGE_BCM432X_PATCH)
 	/* Set Listen Interval */
 	bcm_mkiovar("assoc_listen", (char *)&listen_interval, 4, iovbuf, sizeof(iovbuf));
 	if ((ret = dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf))) < 0)
 		DHD_ERROR(("%s assoc_listen failed %d\n", __FUNCTION__, ret));
-#endif /* CONFIG_LGE_BCM432X_PATCH */
 
 	/* query for 'ver' to get version info from firmware */
 	memset(buf, 0, sizeof(buf));
@@ -1737,12 +1729,8 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	/* Print fw version info */
 	DHD_ERROR(("Firmware version = %s\n", buf));
 
-/* LGE_CHANGE_S [yoohoo@lge.com] 2009-08-27, already PM setup is configured */
-#if !defined(CONFIG_LGE_BCM432X_PATCH)
 	/* Set PowerSave mode */
 	dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM, (char *)&power_mode, sizeof(power_mode));
-#endif /* CONFIG_LGE_BCM432X_PATCH */
-/* LGE_CHANGE_E [yoohoo@lge.com] 2009-08-27, already PM setup is configured */
 
 	/* Match Host and Dongle rx alignment */
 	bcm_mkiovar("bus:txglomalign", (char *)&dongle_align, 4, iovbuf, sizeof(iovbuf));
@@ -1752,8 +1740,6 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	bcm_mkiovar("bus:txglom", (char *)&glom, 4, iovbuf, sizeof(iovbuf));
 	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
 
-/* LGE_CHANGE_S [yoohoo@lge.com] 2009-04-08, roam_off */
-#if !defined(CONFIG_LGE_BCM432X_PATCH)
 	/* Setup timeout if Beacons are lost and roam is off to report link down */
 	bcm_mkiovar("bcn_timeout", (char *)&bcn_timeout, 4, iovbuf, sizeof(iovbuf));
 	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
@@ -1761,8 +1747,6 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	/* Enable/Disable build-in roaming to allowed ext supplicant to take of romaing */
 	bcm_mkiovar("roam_off", (char *)&dhd_roam, 4, iovbuf, sizeof(iovbuf));
 	dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-#endif /* CONFIG_LGE_BCM432X_PATCH */
-/* LGE_CHANGE_E [yoohoo@lge.com] 2009-04-08, roam_off */
 
 #if defined(SOFTAP)
 	if (ap_fw_loaded == TRUE) {
@@ -1770,7 +1754,6 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	}
 #endif 
 
-#if !defined(CONFIG_LGE_BCM432X_PATCH)
 	if (dhd_roam == 0)
 	{
 		/* set internal roaming roaming parameters */
@@ -1816,7 +1799,6 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 				DHD_ERROR(("%s: Original band restore failed\n", __FUNCTION__));
 		}
 	}
-#endif /* CONFIG_LGE_BCM432X_PATCH */
 
 	/* Force STA UP */
 	if (dhd_radio_up)

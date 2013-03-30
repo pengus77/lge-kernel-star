@@ -584,7 +584,6 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 	int power_mode = PM_OFF;
 	char iovbuf[32];
 	int bcn_li_dtim = 3;
-	uint roamvar = 1;
 
 	if (dhd && dhd->up) {
 		if (value && dhd->in_suspend) {
@@ -615,10 +614,6 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 				bcm_mkiovar("bcn_li_dtim", (char *)&bcn_li_dtim,
 					4, iovbuf, sizeof(iovbuf));
 				dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-
-				bcm_mkiovar("roam_off", (char *)&roamvar, 4,
-					iovbuf, sizeof(iovbuf));
-				dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
 			}
 		} else {
 			/* Kernel resumed  */
@@ -644,11 +639,6 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 
 				bcm_mkiovar("bcn_li_dtim", (char *)&dhd->dtim_skip,
 					4, iovbuf, sizeof(iovbuf));
-				dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
-
-				roamvar = 0;
-				bcm_mkiovar("roam_off", (char *)&roamvar, 4, iovbuf,
-					sizeof(iovbuf));
 				dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
 			}
 		}
