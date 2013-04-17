@@ -1778,6 +1778,12 @@ static void star_gauge_follower_func(void)
 {
 	struct battery_info *batt_info = refer_batt_info;
 
+	// If the diff is over 5%, just reset it
+	if (batt_info->capacity - batt_info->capacity_gauge > 5 ||
+			batt_info->capacity - batt_info->capacity_gauge < -5) {
+		batt_info->capacity = batt_info->capacity_gauge;
+	}
+
 	batt_info->prev_capacity = batt_info->capacity;
 	if(charger_ic_get_status() != CHARGER_DISABLE)
 	{
@@ -2198,7 +2204,7 @@ static int __init battery_probe(struct platform_device *pdev)
     batt_info->temp_control = TEMP_CONTROL_OFF;
 
 	/* Create Battery Workqueue */
-	batt_info->battery_workqueue = create_workqueue("SU660_Battery_Workqueue");
+	batt_info->battery_workqueue = create_singlethread_workqueue("SU660_Battery_Workqueue");
 	if( batt_info->battery_workqueue == NULL ) {
 		ret = -ENOMEM;
 		goto create_work_queue_fail;
@@ -2408,70 +2414,22 @@ static int battery_suspend(struct platform_device *pdev,
 		/* RTC Setting & Alarm Setting Function */
 		if(max8907c_rtc_alarm_count_read(&alarm_sec) 
 			&& max8907c_rtc_count_read(&now_sec)) {
-	
-			if (alarm_sec == batt_info->old_checkbat_sec) {
-				alarm_sec = batt_info->old_alarm_sec;
-			}
+
 			checkbat_sec = now_sec + batt_info->sleep_polling_interval;
-			DBG("[CHG_RTC] alarm_sec=0x%x, now_sec=0x%x", alarm_sec, now_sec);
-			DBG("[CHG_RTC] old_alarm_sec=0x%x, checkbat_sec=0x%x", batt_info->old_alarm_sec, checkbat_sec);
-
-			if(batt_info->old_alarm_sec < now_sec) {
-				batt_info->old_alarm_sec = 0;
+			if (checkbat_sec <= alarm_sec) {
+				next_alarm_sec = checkbat_sec;
+			} else if ((checkbat_sec > alarm_sec) && (now_sec <= alarm_sec)) {
+				next_alarm_sec = alarm_sec;
 			}
 
-			if ((BAT_MAX(checkbat_sec, alarm_sec) - BAT_MIN(checkbat_sec, alarm_sec)) > 20) {
-
-				if (batt_info->old_alarm_sec == 0) {
-					if (checkbat_sec < alarm_sec)   // next battery checking time is earlier than alarm time
-					{
-						next_alarm_sec = checkbat_sec;
-						batt_info->old_alarm_sec = alarm_sec;
-						batt_info->old_checkbat_sec = checkbat_sec;
-						if (max8907c_rtc_alarm_write(next_alarm_sec))
-						{
-							rtc_time_to_tm(next_alarm_sec, &tm);
-							DBG("rtc_write_to_tm: 1[%04d-%02d-%02d %02d:%02d:%02d]: write_time=0x%x ", 
-								(tm.tm_year + LINUX_RTC_BASE_YEAR), tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, next_alarm_sec);
-						} else {
-							DBG("[Warning] 1:CHG_RTC write Fail!!");
-						}
-						DBG("[CHG_RTC : final] next_alarm_sec=0x%x, old_alarm_sec=0x%x", next_alarm_sec, batt_info->old_alarm_sec);
-					}
-				} else {
-					if ((checkbat_sec <= alarm_sec) && (checkbat_sec <= batt_info->old_alarm_sec)) {
-						next_alarm_sec = checkbat_sec;
-						batt_info->old_alarm_sec = alarm_sec; // Assume: if alarm is changed, system determine new alarm is earlier than old alarm
-						batt_info->old_checkbat_sec = checkbat_sec;
-						if (max8907c_rtc_alarm_write(next_alarm_sec)) {
-							rtc_time_to_tm(next_alarm_sec, &tm);
-							DBG("rtc_write_to_tm: 2[%04d-%02d-%02d %02d:%02d:%02d]: write_time=0x%x ", 
-								(tm.tm_year + LINUX_RTC_BASE_YEAR), tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, next_alarm_sec);
-						} else {
-							DBG("[Warning] 2:CHG_RTC write Fail!!");
-						}
-						DBG("[CHG_RTC : final] next_alarm_sec=0x%x, old_alarm_sec=0x%x", next_alarm_sec, batt_info->old_alarm_sec);
-					} else if ( (batt_info->old_alarm_sec <= alarm_sec) && (batt_info->old_alarm_sec <= checkbat_sec) ) {
-						next_alarm_sec = batt_info->old_alarm_sec;
-						batt_info->old_alarm_sec = 0;
-						batt_info->old_checkbat_sec = 0;
-						if (max8907c_rtc_alarm_write(next_alarm_sec)) {
-							rtc_time_to_tm(next_alarm_sec, &tm);
-							DBG("rtc_write_to_tm: 3[%04d-%02d-%02d %02d:%02d:%02d]: write_time=0x%x ", 
-								(tm.tm_year + LINUX_RTC_BASE_YEAR), tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, next_alarm_sec);
-						} else {
-							DBG("[Warning] 3:CHG_RTC write Fail!!");
-						}
-						DBG("[CHG_RTC : final] next_alarm_sec=0x%x, old_alarm_sec=0x%x", next_alarm_sec, batt_info->old_alarm_sec);
-					}
-				}	// End of if (batt_info->old_alarm_sec == 0) 
+			if (max8907c_rtc_alarm_write(next_alarm_sec)) {
+				rtc_time_to_tm(next_alarm_sec, &tm);
+				DBG("rtc_write_to_tm: 3[%04d-%02d-%02d %02d:%02d:%02d]: write_time=0x%x ",
+						(tm.tm_year + LINUX_RTC_BASE_YEAR), tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, next_alarm_sec);
+			} else {
+				DBG("[Warning] 3:CHG_RTC write Fail!!");
 			}
-			DBG("Skipped this Process");
-		} else {
-			DBG("Reading RTC Value Failed.");
-		}	
-#else
-	// Do Nothing
+		}
 #endif
 	}	// End of if(at_charge_index == ...)
 	pdev->dev.power.power_state = state;
