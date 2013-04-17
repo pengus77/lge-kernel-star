@@ -666,7 +666,7 @@ static int sdhci_tegra_run_frequency_tuning(struct sdhci_host *sdhci)
 	u8 ctrl;
 	u32 ier;
 	u32 mask;
-	unsigned int timeout = 10;
+	unsigned int timeout = 100;
 	int flags;
 	u32 intstatus;
 
@@ -1223,10 +1223,10 @@ struct sdhci_pltfm_data sdhci_tegra_pdata = {
 	.quirks = SDHCI_QUIRK_BROKEN_TIMEOUT_VAL |
 #ifndef CONFIG_ARCH_TEGRA_2x_SOC
 		  SDHCI_QUIRK_DATA_TIMEOUT_USES_SDCLK |
+		  SDHCI_QUIRK_NON_STD_VOLTAGE_SWITCHING |
 #endif
 #ifdef CONFIG_ARCH_TEGRA_3x_SOC
 		  SDHCI_QUIRK_NONSTANDARD_CLOCK |
-		  SDHCI_QUIRK_NON_STD_VOLTAGE_SWITCHING |
 		  SDHCI_QUIRK_NON_STANDARD_TUNING |
 #endif
 		  SDHCI_QUIRK_SINGLE_POWER_WRITE |
