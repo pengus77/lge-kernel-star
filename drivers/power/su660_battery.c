@@ -20,7 +20,7 @@
 #include <linux/delay.h>
 #include <linux/time.h>
 #include <linux/slab.h>
-#include <linux/rtc.h>
+//#include <linux/rtc.h> 
 #include <linux/mfd/max8907c.h>
 #include <linux/workqueue.h>
 #include <linux/platform_device.h>
@@ -31,18 +31,15 @@
 #include <linux/max8922l.h>
 #include <linux/mfd/max8907c.h>
 #include <linux/su660_battery.h>
+//#include <linux/mfd/max8907_rtc.h>
 #include "su660_battery_temp.h"
-
-extern int max8907c_rtc_alarm_write(unsigned int count);
-extern int max8907c_rtc_count_write(unsigned int count);
-extern int max8907c_rtc_alarm_count_read(unsigned int *count);
-extern int max8907c_rtc_count_read(unsigned int *count);
 
 /* Extern MUIC Function */
 extern TYPE_CHARGING_MODE get_muic_charger_type(void);
 
 #define TRICKLE_RECHECK
-#define BATT_DEBUG 0
+#define BATT_DEBUG
+#define BATT_RTC 0//MBksjung 2012.04.24: remove for battery rtc
 
 #define TEMP_CONTROL_ON 1
 #define TEMP_CONTROL_OFF 0
@@ -55,7 +52,7 @@ asmlinkage int bprintk(const char *fmt, ...)
 	va_end(args);
 	return r;
 }
-#if BATT_DEBUG
+#ifdef  BATT_DEBUG 
 #define DBG(fmt, arg...) bprintk("[BATTERY] : %s : " fmt "\n", __func__, ## arg)
 #else
 #define DBG(fmt, arg...) do {} while (0)
@@ -66,9 +63,10 @@ asmlinkage int bprintk(const char *fmt, ...)
 #define TEMP_LIMIT_UPPER	(450)
 #define TEMP_LIMIT_LOWER	(-50)
 
+#if BATT_RTC
 /* Base Year For Linux */
 #define LINUX_RTC_BASE_YEAR	1900
-
+#endif
 #define READ_TEMP_ADC
 #if defined(READ_TEMP_ADC)
 static int TEMP_ADC_VALUE = 0;
@@ -79,10 +77,12 @@ ssize_t show_tempadc(struct device *dev, struct device_attribute *attr, char *bu
 DEVICE_ATTR(readtempadc,0644,show_tempadc,NULL);
 #endif
 
-#define CHGSB_PGB_OFF_OFF	0
-#define CHGSB_PGB_ON_ON		1
-#define CHGSB_PGB_OFF_ON	2
-#define CHGSB_PGB_ON_OFF	3
+static enum {
+	CHGSB_PGB_OFF_OFF = 0,
+	CHGSB_PGB_ON_ON,
+	CHGSB_PGB_OFF_ON,
+	CHGSB_PGB_ON_OFF, 
+};
 
 static enum power_supply_property battery_props[] = {
 	POWER_SUPPLY_PROP_STATUS,
@@ -95,7 +95,6 @@ static enum power_supply_property battery_props[] = {
 	POWER_SUPPLY_PROP_ONLINE,
 };
 
-#if BATT_DEBUG
 /* Charger String For Debug */
 static const char *charger_ic_status_name[] = {
 	"CHARGER_USB500",
@@ -137,7 +136,7 @@ static const char *ChargerType_name[] = {
 	"USB_CDP",
 	"USB_ACA",
 };
-#endif
+
 
 static enum power_supply_property ac_usb_battery_props[] = {
 	POWER_SUPPLY_PROP_ONLINE,
@@ -162,10 +161,11 @@ struct battery_info {
 	int			boot_TA_setting;
 	int			charge_setting_chcomp;
 
+#if BATT_RTC 
 	/* RTC Related Variables */
 	unsigned int		old_alarm_sec;
 	unsigned int		old_checkbat_sec;
-
+#endif
 	/* Polling Related Variables */
 	int			polling_interval;
 	int			id_polling_interval;
@@ -192,6 +192,7 @@ struct battery_info {
 	int				prev_present;
 	int				prev_voltage;
 	int				prev_temperature;
+	int				prev_capacity;
 	int				prev_health;
 
 	int				force_update;
@@ -205,7 +206,7 @@ struct battery_info {
 static struct battery_info *refer_batt_info = NULL;
 
 /*for battery update*/
-extern int g_is_suspend;
+extern g_is_suspend;
 /* Battery Mutex */
 static DEFINE_MUTEX(battery_mutex);
 
@@ -220,6 +221,12 @@ static unsigned char at_charge_comp = 0;
 static unsigned char at_charge_index = 0;
 static unsigned char ELT_test_mode = 0;
 
+//MOBII_CHNANGE_S 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
+#if defined(CONFIG_MACH_STAR_P990) || defined(CONFIG_MACH_STAR_SU660) || defined(CONFIG_MACH_STAR_P999)
+static int ignore_send_uevent = FALSE; // for FOTA
+#endif
+//MOBII_CHNANGE_E 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
+
 /* AT Cmd. */
 unsigned char ARRAY_TP_BOOT(void)
 {
@@ -227,28 +234,53 @@ unsigned char ARRAY_TP_BOOT(void)
 }
 EXPORT_SYMBOL(ARRAY_TP_BOOT);
 
+static unsigned int get_current_time(void)
+{
+	struct timespec ts;
+	signed long	nsec;
+	getnstimeofday(&ts);
+	nsec = timespec_to_ns(&ts);
+	do_div(nsec, 1000000);
+	return (unsigned int) nsec;
+}
+
 /* Static Declares */
 static void star_gauge_follower_func(void);
 static void charger_contol_with_battery_temp(void);
 static void star_capacity_from_voltage_via_calculate(void);
 
-static int battery_read_temperature(void)
+static int battery_read_temperature()
 {
+	static unsigned short BAT_TEMP_TABLE[] = BAT_T_TABLE;
 	unsigned int mili_temp;
 	unsigned int temp;
-
+#if 0 //temp table
 	max8907c_adc_battery_read_temp(&mili_temp);
+	temp = BAT_TEMP_TABLE[mili_temp];
 
+	if ((at_boot_state == 1) 
+			|| (at_charge_index == 1) 
+			|| (ELT_test_mode == 1))
+		temp = 270; 		// Factory Test Mode, fake Temperature value
+	else
+		temp = temp - 2730; // Conversion from [K] to [C] <- *10
+#else
+max8907c_adc_battery_read_temp(&mili_temp);
 #if defined(READ_TEMP_ADC)
 	TEMP_ADC_VALUE = mili_temp;
 #endif
 
-	temp = batt_temp_tbl[mili_temp];
+temp = batt_temp_tbl[mili_temp];
+if ((at_boot_state == 1) 
+		|| (at_charge_index == 1)
+		|| (ELT_test_mode == 1))
+	temp = 270; 		// Factory Test Mode, fake Temperature value
 
+#endif
 	return (int)temp;	// Temp
 }
 
-static int battery_read_voltage(void)
+static int battery_read_voltage()
 {
 	int voltage = 0;
 
@@ -300,6 +332,7 @@ static void battery_update(struct battery_info *batt_info)
 	/* Backup Battery Info */	
 	batt_info->prev_voltage			= batt_info->voltage;
 	batt_info->prev_temperature		= batt_info->temperature;
+	batt_info->prev_capacity		= batt_info->capacity;
 	batt_info->prev_present			= batt_info->present;
 
 	/* 
@@ -380,6 +413,7 @@ static void battery_update(struct battery_info *batt_info)
 			else 
 			{
 				int tmp_volt = battery_read_voltage();
+				int tmp_temp = battery_read_temperature(); 
 				//	if ( ) // Recheck Battery Data
 				{
 					DBG("Recheck Battery [O:%d, N:%d]", batt_info->voltage, tmp_volt);
@@ -412,9 +446,219 @@ static void battery_update(struct battery_info *batt_info)
 	mutex_unlock(&battery_mutex);
 }
 
+#if defined(CONFIG_MACH_STAR_P990)
+static void charger_contorl_unlimited_temp(void)
+{
+	struct battery_info *batt_info = refer_batt_info;
+	TYPE_CHARGING_MODE muic_mode;
+	muic_mode = get_muic_charger_type();
+
+	DBG("charger_contorl_unlimited_temp present=%d",batt_info->present);
+	if ( batt_info->present == 1 ) 
+	{
+		batt_info->prev_health = batt_info->health;
+
+		DBG("charger_contorl_unlimited_temp present=%d",batt_info->health);
+		switch ( batt_info->health ) 
+		{
+			case POWER_SUPPLY_HEALTH_GOOD:
+				if (batt_info->temperature >= 750) {
+					// Deactivate Charger : Battery Critical Overheat
+					DBG("POWER_SUPPLY_HEALTH_GOOD 750 over");
+					batt_info->health = POWER_SUPPLY_HEALTH_CRITICAL_OVERHEAT;
+				}
+				else if ((batt_info->temperature >= 550) && (batt_info->temperature < 750)) {
+					// Change Charger Setting : Battery Overheat, USB_500 mode
+					DBG("POWER_SUPPLY_HEALTH_GOOD 550~750 ");
+					batt_info->health = POWER_SUPPLY_HEALTH_OVERHEAT;
+					if ( charger_ic_get_status() != CHARGER_DISABLE ) {
+						if ( charger_ic_get_state() != CHARGER_STATE_FULLBATTERY ) 
+						{
+							DBG("POWER_SUPPLY_HEALTH_GOOD CHARGER_STATE_CHARGE 550~750 ");
+							batt_info->charge_setting_chcomp = charger_ic_get_status();
+							charger_ic_set_state(CHARGER_STATE_CHARGE);
+							charger_ic_set_mode(CHARGER_USB500);
+						}
+					}
+				} else if (batt_info->temperature <= (-100)) {
+					// Deactivate Charger : Battery Cold
+					DBG("POWER_SUPPLY_HEALTH_GOOD temperature -100 ");
+					batt_info->health = POWER_SUPPLY_HEALTH_COLD;
+				} else {
+					DBG("POWER_SUPPLY_HEALTH_GOOD temperature -100 else ");
+					batt_info->health = POWER_SUPPLY_HEALTH_GOOD;
+				}
+				break;
+
+			case POWER_SUPPLY_HEALTH_OVERHEAT:
+				if (batt_info->temperature >= 750) {
+					// Deactivate Charger : Battery Critical Overheat
+					DBG("POWER_SUPPLY_HEALTH_OVERHEAT 750 over ");
+					batt_info->health = POWER_SUPPLY_HEALTH_CRITICAL_OVERHEAT;
+				}
+				else if(batt_info->temperature >= 520 && batt_info->temperature <= 750)
+				{
+					DBG("POWER_SUPPLY_HEALTH_OVERHEAT 520~750  ");
+					batt_info->health = POWER_SUPPLY_HEALTH_OVERHEAT;
+					if ( charger_ic_get_status() != CHARGER_DISABLE ){
+						    if (charger_ic_get_state() != CHARGER_STATE_FULLBATTERY) 
+							{
+								charger_ic_set_state(CHARGER_STATE_CHARGE);
+								charger_ic_set_mode(CHARGER_USB500);
+								batt_info->high_temp_overvoltage=0;
+								DBG("POWER_SUPPLY_HEALTH_OVERHEAT CHARGER_STATE_CHARGE 520~750");
+
+							}	
+						}
+				}				
+				else if (batt_info->temperature <= 520) {
+					if ( charger_ic_get_status() != CHARGER_DISABLE ) {
+						// Reactivate Charger : Battery Normal again
+						DBG("POWER_SUPPLY_HEALTH_OVERHEAT temperature 520 ");
+						batt_info->health = POWER_SUPPLY_HEALTH_GOOD;
+						if (charger_ic_get_state() != CHARGER_STATE_FULLBATTERY) 
+						{
+							charger_ic_set_state(CHARGER_STATE_CHARGE);
+							charger_ic_set_mode(batt_info->charge_setting_chcomp);
+						}
+					}
+					else
+						batt_info->health = POWER_SUPPLY_HEALTH_GOOD;
+				} else {
+					DBG(" HEALTH_OVERHEAT Battery Critical Overheat");
+					batt_info->health = POWER_SUPPLY_HEALTH_OVERHEAT;
+				}
+				break;
+
+			case POWER_SUPPLY_HEALTH_CRITICAL_OVERHEAT:
+				if (batt_info->temperature <= 720) {
+					if ( charger_ic_get_status() != CHARGER_DISABLE ) {
+						// Reactivate Charger : Battery USB mode again
+						DBG("POWER_SUPPLY_HEALTH_CRITICAL_OVERHEAT 720 over");
+						batt_info->health = POWER_SUPPLY_HEALTH_OVERHEAT;
+						if (charger_ic_get_state() != CHARGER_STATE_FULLBATTERY) 
+						{
+							charger_ic_set_state(CHARGER_STATE_CHARGE);
+							charger_ic_set_mode(CHARGER_USB500);
+						}
+					}
+					else
+					batt_info->health = POWER_SUPPLY_HEALTH_OVERHEAT;
+				}
+				else {
+					DBG("POWER_SUPPLY_HEALTH_CRITICAL_OVERHEAT Battery Critical Overheat");
+					batt_info->health = POWER_SUPPLY_HEALTH_CRITICAL_OVERHEAT;
+				}
+				break;
+
+			case POWER_SUPPLY_HEALTH_COLD:
+				if ( charger_ic_get_status() != CHARGER_DISABLE ) {
+					// Reactivate Charger : Battery Normal again
+					DBG("POWER_SUPPLY_HEALTH_COLD Battery");
+					batt_info->health = POWER_SUPPLY_HEALTH_GOOD;
+					if ( charger_ic_get_state() != CHARGER_STATE_FULLBATTERY ) 
+					{
+						DBG("POWER_SUPPLY_HEALTH_COLD Battery  CHARGER_STATE_CHARGE");
+						charger_ic_set_state(CHARGER_STATE_CHARGE);
+						charger_ic_set_mode(batt_info->charge_setting_chcomp);
+					}
+					
+				}
+				else
+					batt_info->health = POWER_SUPPLY_HEALTH_GOOD;
+				
+				break;
+
+			default:
+				DBG("Battery Unknown Health State");
+				batt_info->health = POWER_SUPPLY_HEALTH_UNKNOWN;
+				break;
+		} // switch end
+	}// if end
+}// function end
+#else
+/* Charger Control with Temp. */
+static void charger_contorl_unlimited_temp(void)
+{
+		struct battery_info *batt_info = refer_batt_info;
+		TYPE_CHARGING_MODE muic_mode;
+		muic_mode = get_muic_charger_type();
+		DBG();
+		if ( batt_info->present == 1 ) 
+		{
+			batt_info->prev_health = batt_info->health;
+	
+			switch ( batt_info->health ) 
+			{
+				case POWER_SUPPLY_HEALTH_GOOD:
+					if (batt_info->temperature >= 550) {
+						// Deactivate Charger : Battery Critical Overheat
+						DBG("Battery Critical Overheat");
+						batt_info->health = POWER_SUPPLY_HEALTH_CRITICAL_OVERHEAT;
+
+					}
+					else if ((batt_info->temperature >= 450) && (batt_info->temperature < 550)) {
+						// Change Charger Setting : Battery Overheat, USB_500 mode
+						DBG("Battery Overheat");
+						batt_info->health = POWER_SUPPLY_HEALTH_OVERHEAT;
+
+					} else if (batt_info->temperature <= (-100)) {
+						// Deactivate Charger : Battery Cold
+						DBG("Battery Cold");
+						batt_info->health = POWER_SUPPLY_HEALTH_COLD;
+
+					} else
+						batt_info->health = POWER_SUPPLY_HEALTH_GOOD;
+					break;
+	
+				case POWER_SUPPLY_HEALTH_OVERHEAT:
+					if (batt_info->temperature >= 550) {
+						// Deactivate Charger : Battery Critical Overheat
+						DBG("Battery Critical Overheat");
+						batt_info->health = POWER_SUPPLY_HEALTH_CRITICAL_OVERHEAT;
+
+					} else if (batt_info->temperature <= 420) {
+
+							batt_info->health = POWER_SUPPLY_HEALTH_GOOD;
+					} else {
+						DBG("Battery Critical Overheat");
+						batt_info->health = POWER_SUPPLY_HEALTH_OVERHEAT;
+					}
+					break;
+	
+				case POWER_SUPPLY_HEALTH_CRITICAL_OVERHEAT:
+					if (batt_info->temperature <= 520) {
+						batt_info->health = POWER_SUPPLY_HEALTH_OVERHEAT;
+					}
+					else {
+						DBG("Battery Critical Overheat");
+						batt_info->health = POWER_SUPPLY_HEALTH_CRITICAL_OVERHEAT;
+					}
+					break;
+	
+				case POWER_SUPPLY_HEALTH_COLD:
+					if (batt_info->temperature >= (-50)) {
+							batt_info->health = POWER_SUPPLY_HEALTH_GOOD;
+					}
+					else {
+						DBG("Battery Cold");
+						batt_info->health = POWER_SUPPLY_HEALTH_COLD;
+					}
+					break;
+	
+				default:
+					DBG("Battery Unknown Health State");
+					batt_info->health = POWER_SUPPLY_HEALTH_UNKNOWN;
+					break;
+			} // switch end
+		}// if end
+}
+#endif
 static void charger_contol_with_battery_temp(void)
 {
 	struct battery_info *batt_info = refer_batt_info;
+    TYPE_CHARGING_MODE muic_mode;
+	muic_mode = get_muic_charger_type();
 
 	if ( batt_info->present == 1 ) 
 	{
@@ -569,24 +813,20 @@ static void charger_contol_with_battery_temp(void)
 
 void determine_charger_state_with_charger_ic(void) 
 {
-	struct battery_info *batt_info;
-	unsigned int value_status;
-	unsigned int value_pgb;
-	unsigned int next_state;
-	unsigned int charger_gpio_state;
-
-	// MOBII_CHANGE_S [shhong@mobii.co.kr] 2012-04-27 : Kernel Panic Issue Solution.
+// MOBII_CHANGE_S [shhong@mobii.co.kr] 2012-04-27 : Kernel Panic Issue Solution.
 	if(refer_batt_info == NULL) {
 		DBG("Battery Info No Longer Exists, Then This Function will be ignored.");
 		return;
 	}
-	// MOBII_CHANGE_E [shhong@mobii.co.kr] 2012-04-27 : Kernel Panic Issue Solution.
+// MOBII_CHANGE_E [shhong@mobii.co.kr] 2012-04-27 : Kernel Panic Issue Solution.
+	struct battery_info *batt_info = refer_batt_info;
+	unsigned int value_status = 0;
+	unsigned int value_pgb = 0;
+	unsigned int next_state;
+	unsigned int charger_gpio_state;
 
-	batt_info = refer_batt_info;
-	value_status = read_gpio_status();
-	value_pgb = read_gpio_pgb();
-	next_state = CHARGER_STATE_SHUTDOWN;
-	charger_gpio_state = CHGSB_PGB_ON_OFF;
+	value_status 	= read_gpio_status();
+	value_pgb 	= read_gpio_pgb();
 
 	//DBG("GPIO STATE[%d], PGB[%d]", value_status, value_pgb);
 
@@ -774,6 +1014,11 @@ static void battery_data_polling_period_change(void)
 
 	batt_info->polling_interval = BAT_MIN(BAT_MIN(critical_period_data, vol_period_data), BAT_MIN(temp_period_data, gauge_period_data));
 	batt_info->sleep_polling_interval = BAT_MIN(BAT_MIN(critical_period_wake, vol_period_wake), BAT_MIN(temp_period_wake, gauge_period_wake));
+#if 0
+	DBG("Poll/Wake[%d, %d]", batt_info->polling_interval/HZ, batt_info->sleep_polling_interval);
+	DBG("Cri[%d, %d]/Vol[%d, %d]", critical_period_data/HZ, critical_period_wake, vol_period_data, vol_period_wake);
+	DBG("Tem[%d, %d]/Gau[%d, %d]", temp_period_data/HZ, temp_period_wake, gauge_period_data/HZ, gauge_period_wake);
+#endif	
 }
 
 #if defined(TRICKLE_RECHECK)
@@ -813,7 +1058,7 @@ static void battery_update_changes(struct battery_info *batt_info, int force_upd
 	determine_charger_state_with_charger_ic();
 
 	/* Control Charger for Battery Health */
-#if 1
+#if 0
 	charger_contol_with_battery_temp();
 #else
 if (batt_info->temp_control == TEMP_CONTROL_OFF)
@@ -861,8 +1106,17 @@ else //TEMP_CONTROL_ON
 		battery_data_polling_period_change();
 	}
 
-	power_supply_changed(&batt_info->bat);
 
+
+//MOBII_CHNANGE_S 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
+#if defined(CONFIG_MACH_STAR_P990) || defined(CONFIG_MACH_STAR_SU660) || defined(CONFIG_MACH_STAR_P999)
+	if (ignore_send_uevent == FALSE) {
+		power_supply_changed(&batt_info->bat);
+	}
+#else
+	power_supply_changed(&batt_info->bat);
+#endif
+//MOBII_CHNANGE_E 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
 	//	power_supply_changed(&batt_info->usb);
 	//	power_supply_changed(&batt_info->ac);
 	DBG("[BATT] voltage [%d], Temperature [%d], Capacity[%d], Present [%d], BattHealth[%s]\n"
@@ -889,7 +1143,15 @@ void charger_ic_set_mode_for_muic(unsigned int mode)
 				case CHARGER_USB100:
 				case CHARGER_ISET:
 				case CHARGER_FACTORY:
+//MOBII_CHNANGE_S 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
+#if defined(CONFIG_MACH_STAR_P990) || defined(CONFIG_MACH_STAR_SU660) || defined(CONFIG_MACH_STAR_P999)
+					if (ignore_send_uevent == FALSE) {
+						power_supply_changed(&refer_batt_info->bat);
+					}
+#else
 					power_supply_changed(&refer_batt_info->bat);
+#endif
+//MOBII_CHNANGE_E 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
 					//power_supply_changed(&refer_batt_info->usb);
 					//power_supply_changed(&refer_batt_info->ac);
 					break;
@@ -906,7 +1168,7 @@ void charger_ic_set_mode_for_muic(unsigned int mode)
 	if (refer_batt_info->health != POWER_SUPPLY_HEALTH_GOOD)
 	{
 		refer_batt_info->health = POWER_SUPPLY_HEALTH_GOOD;
-#if 1
+#if 0
 		charger_contol_with_battery_temp();
 #else
 		if (refer_batt_info->temp_control == TEMP_CONTROL_OFF)
@@ -933,7 +1195,15 @@ void charger_ic_disable_for_muic(void)
 #if defined(TRICKLE_RECHECK)
 	refer_batt_info->trickle_charge_check = 0;
 #endif
+//MOBII_CHNANGE_S 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
+#if defined(CONFIG_MACH_STAR_P990) || defined(CONFIG_MACH_STAR_SU660) || defined(CONFIG_MACH_STAR_P999)
+	if (ignore_send_uevent == FALSE) {
+		power_supply_changed(&refer_batt_info->bat);
+	}
+#else
 	power_supply_changed(&refer_batt_info->bat);
+#endif
+//MOBII_CHNANGE_E 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
 }
 EXPORT_SYMBOL(charger_ic_disable_for_muic);
 
@@ -956,23 +1226,21 @@ EXPORT_SYMBOL(notification_of_changes_to_battery);
 /* Battery Status Polling */
 static void battery_work(struct work_struct *work)
 {
-	struct battery_info *batt_info;
-	batt_info = refer_batt_info;
-
 	DBG();
-
+	struct battery_info *batt_info = refer_batt_info;
 	battery_update_changes(batt_info, 0);
 	queue_delayed_work(batt_info->battery_workqueue, &batt_info->star_monitor_work, batt_info->polling_interval);
 }
 
 /* Battery ID Polling */
-static void battery_id_check(void)
+static void battery_id_check() 
 {
-	struct battery_info *batt_info;
+	struct battery_info *batt_info = refer_batt_info;
+	int batt_voltage;
 	int batt_temperature;
-
-	batt_info			= refer_batt_info;
+	batt_voltage 		= battery_read_voltage();
 	batt_temperature	= battery_read_temperature();
+
 
 	if ( at_charge_index == 0 )
 	{
@@ -983,7 +1251,15 @@ static void battery_id_check(void)
 			{
 				DBG("No Battery or Dummy Battery State");
         		batt_info->present = 0;
+//MOBII_CHNANGE_S 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
+#if defined(CONFIG_MACH_STAR_P990) || defined(CONFIG_MACH_STAR_SU660) || defined(CONFIG_MACH_STAR_P999)
+				if (ignore_send_uevent == FALSE) {
+					power_supply_changed(&batt_info->bat);
+				}
+#else
 				power_supply_changed(&batt_info->bat);
+#endif
+//MOBII_CHNANGE_E 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
 			}
 		}
 	}
@@ -997,7 +1273,6 @@ static void battery_id_check(void)
 	}
 
 }
-
 static void battery_id_work(struct work_struct *work)
 {
 	struct battery_info *batt_info = container_of(work,
@@ -1019,11 +1294,11 @@ static int battery_get_property(struct power_supply *psy,
 		enum power_supply_property psp,
 		union power_supply_propval *val)
 {
-	TYPE_CHARGING_MODE muic_charging_mode;
 	struct battery_info *batt_info;
-	
-	muic_charging_mode = get_muic_charger_type();
 	batt_info = to_battery_info(psy);
+	TYPE_CHARGING_MODE muic_charging_mode = CHARGING_NONE;
+
+	muic_charging_mode = get_muic_charger_type();
 
 	switch (psp) {
 		case POWER_SUPPLY_PROP_STATUS:
@@ -1169,7 +1444,7 @@ static int battery_get_property(struct power_supply *psy,
 			break;
 
 		case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-			val->intval = batt_info->voltage * 1000;
+			val->intval = batt_info->voltage;
 			break;
 
 		case POWER_SUPPLY_PROP_CAPACITY:
@@ -1205,6 +1480,9 @@ static int ac_battery_get_property(struct power_supply *psy,
 		enum power_supply_property psp,
 		union power_supply_propval *val)
 {
+	struct battery_info *batt_info;
+	batt_info = to_battery_info(psy);
+
 	switch (psp) {
 		case POWER_SUPPLY_PROP_ONLINE:
 			{				
@@ -1230,6 +1508,9 @@ static int usb_battery_get_property(struct power_supply *psy,
 		enum power_supply_property psp,
 		union power_supply_propval *val)
 {
+	struct battery_info *batt_info;
+	batt_info = to_battery_info(psy);
+
 	switch (psp) {
 		case POWER_SUPPLY_PROP_ONLINE:
 			{
@@ -1294,15 +1575,39 @@ static ssize_t star_at_chcomp_show_property(
 	if (( batt_info->voltage >= 4100 ) || ( at_charge_comp == 1 ))
 	{
 		batt_info->capacity = 95;
+//MOBII_CHNANGE_S 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
+#if defined(CONFIG_MACH_STAR_P990) || defined(CONFIG_MACH_STAR_SU660) || defined(CONFIG_MACH_STAR_P999)
+		if (ignore_send_uevent == FALSE) {
+			power_supply_changed(&batt_info->bat);
+		}
+#else
 		power_supply_changed(&batt_info->bat);
+#endif
+//MOBII_CHNANGE_E 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
 		batt_info->capacity = 100;
+//MOBII_CHNANGE_S 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
+#if defined(CONFIG_MACH_STAR_P990) || defined(CONFIG_MACH_STAR_SU660) || defined(CONFIG_MACH_STAR_P999)
+		if (ignore_send_uevent == FALSE) {
+			power_supply_changed(&batt_info->bat);
+		}
+#else
 		power_supply_changed(&batt_info->bat);
+#endif
+//MOBII_CHNANGE_E 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
 		count = sprintf(buf, "1\n");
 	}
 	else
 	{
 		batt_info->capacity = 95;
+//MOBII_CHNANGE_S 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
+#if defined(CONFIG_MACH_STAR_P990) || defined(CONFIG_MACH_STAR_SU660) || defined(CONFIG_MACH_STAR_P999)
+		if (ignore_send_uevent == FALSE) {
+			power_supply_changed(&batt_info->bat);
+		}
+#else
 		power_supply_changed(&batt_info->bat);
+#endif
+//MOBII_CHNANGE_E 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
 		count = sprintf(buf, "0\n");
 	}
 	return count;
@@ -1321,13 +1626,29 @@ static ssize_t star_at_chcomp_store_property(
 	{
 		batt_info->capacity = 95;
 		at_charge_comp = 0;
+//MOBII_CHNANGE_S 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
+#if defined(CONFIG_MACH_STAR_P990) || defined(CONFIG_MACH_STAR_SU660) || defined(CONFIG_MACH_STAR_P999)
+		if (ignore_send_uevent == FALSE) {
+			power_supply_changed(&batt_info->bat);
+		}
+#else
 		power_supply_changed(&batt_info->bat);
+#endif
+//MOBII_CHNANGE_E 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
 	}
 	else if ( value == 1 )
 	{
 		batt_info->capacity = 100;
 		at_charge_comp = 1;
+//MOBII_CHNANGE_S 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
+#if defined(CONFIG_MACH_STAR_P990) || defined(CONFIG_MACH_STAR_SU660) || defined(CONFIG_MACH_STAR_P999)
+		if (ignore_send_uevent == FALSE) {
+			power_supply_changed(&batt_info->bat);
+		}
+#else
 		power_supply_changed(&batt_info->bat);
+#endif
+//MOBII_CHNANGE_S 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
 	}
 	return count;
 }
@@ -1531,11 +1852,7 @@ static void star_gauge_follower_func(void)
 {
 	struct battery_info *batt_info = refer_batt_info;
 
-	if (batt_info->capacity - batt_info->capacity_gauge > 2 ||
-			batt_info->capacity - batt_info->capacity_gauge < -2) {
-		batt_info->capacity = batt_info->capacity_gauge;
-	}
-
+	batt_info->prev_capacity = batt_info->capacity;
 	if(charger_ic_get_status() != CHARGER_DISABLE)
 	{
 		if( batt_info->capacity_gauge > batt_info->capacity )		batt_info->capacity += 1;
@@ -1551,13 +1868,9 @@ static void star_gauge_follower_func(void)
 }
 static void valid_cbc_check_and_process(unsigned int value)  // not used  yet 
 {
-	struct battery_info *batt_info;
-	static unsigned int display_cbc;
-
-	batt_info = refer_batt_info;
-	display_cbc = 0;
-
 	DBG("CDC Value [%d]", value);
+	struct battery_info *batt_info = refer_batt_info;
+	static unsigned int display_cbc = 0;
 
 	if( bat_shutdown == 1 )
 		return;
@@ -1605,7 +1918,7 @@ static void valid_cbc_check_and_process(unsigned int value)  // not used  yet
 				else	
 				{
 					batt_info->capacity_gauge = display_cbc;
-#if 0 // defined(CONFIG_MACH_STAR_P990)
+#if defined(CONFIG_MACH_STAR_P990)
 					batt_info->capacity = display_cbc;
 					batt_info->gauge_on = 1;
 #endif
@@ -1631,6 +1944,7 @@ static void valid_cbc_check_and_process(unsigned int value)  // not used  yet
 
 		if ( batt_info->gauge_on == 1 )
 		{
+			batt_info->prev_capacity = batt_info->capacity;
 			if( batt_info->capacity != 104 )			// at first process, do not update
 				previous_gauge = batt_info->capacity;		// save previous value
 
@@ -1657,6 +1971,8 @@ static void valid_cbc_check_and_process(unsigned int value)  // not used  yet
 			}
 			else // ( 0 < cbc_value < 100 )
 			{
+#if 1
+
 				if( display_cbc >= batt_info->capacity ) 
 				{
 					if((display_cbc - batt_info->capacity) <= 1)
@@ -1667,7 +1983,15 @@ static void valid_cbc_check_and_process(unsigned int value)  // not used  yet
 					else if((display_cbc - batt_info->capacity) > 1)
 					{	
 						batt_info->capacity_gauge = display_cbc;
-						star_gauge_follower_func();
+						if(g_is_suspend)
+						{
+							batt_info->capacity=display_cbc;
+							g_is_suspend=0;
+						}
+						else
+						{
+							star_gauge_follower_func();
+						}
 					}
 				}
 				else if( display_cbc < batt_info->capacity ) 
@@ -1680,22 +2004,43 @@ static void valid_cbc_check_and_process(unsigned int value)  // not used  yet
 					else if ((batt_info->capacity - display_cbc) > 1)
 					{
 						batt_info->capacity_gauge = display_cbc;
-						star_gauge_follower_func();
+						if(g_is_suspend)
+						{
+							batt_info->capacity=display_cbc;
+							g_is_suspend=0;
+						}
+						else
+						{
+							star_gauge_follower_func();
+						}
 					}
 				}
+#else
+                batt_info->capacity = display_cbc;
+#endif						
 				batt_info->capacity_gauge = display_cbc;
 
 				if (batt_info->capacity < 0)	batt_info->capacity = 0;
 				if (batt_info->capacity > 100)	batt_info->capacity = 100;
 			}
 
+#if 0 //MBksjung not used code : Update isuue of capacity when TA/USB disconnect
 			if( ((charger_ic_get_status() == CHARGER_DISABLE) 
 						|| (charger_ic_get_state() == CHARGER_STATE_FULLBATTERY))
 					&& previous_gauge < batt_info->capacity )
 				batt_info->capacity = previous_gauge;
-
-			battery_update(batt_info);
+#endif
+            DBG(" #############batt_info->capacity[%d]##################\n",batt_info->capacity);
+			//battery_update(batt_info);
+//MOBII_CHNANGE_S 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
+#if defined(CONFIG_MACH_STAR_P990) || defined(CONFIG_MACH_STAR_SU660) || defined(CONFIG_MACH_STAR_P999)
+			if (ignore_send_uevent == FALSE) {
+				power_supply_changed(&batt_info->bat);
+			}
+#else
 			power_supply_changed(&batt_info->bat);
+#endif
+//MOBII_CHNANGE_E 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
 		}
 	}
 }
@@ -1748,9 +2093,14 @@ static ssize_t star_battery_store_property(
 		size_t count)
 {
 	struct battery_info *batt_info = refer_batt_info;
+#if BATT_RTC	
 	static unsigned int value = 0, last_cbc = 0;
-
+#else
+	static unsigned int value = 0;
+#endif
 	value = (unsigned int)(simple_strtoul(buf, NULL, 0));
+
+	//DBG("Value : [%d]", value);
 
 	/* Request CBC Cmd. */
 	if (value == 52407)
@@ -1759,12 +2109,16 @@ static ssize_t star_battery_store_property(
 		battery_data_polling_period_change();
 	}
 
-	if((batt_info->present == 1) && (value >= 0 && value <= 100) )
+	if( /*(batt_info->present == 1) &&*/ (value >= 0 && value <= 100) )
 	{
+#if BATT_RTC	
 		if(max8907c_rtc_alarm_count_read(&last_cbc))
 			batt_info->last_cbc_time = last_cbc; 
-
+#else
+	//              batt_info->last_cbc_time = get_current_time();	
+#endif		
 		valid_cbc_check_and_process(value);
+		//DBG("Battery Info Changed [%d]", value);
 	}
 	else if( (value < 0 || value > 100) && (value != 52407) )
 	{
@@ -1790,14 +2144,38 @@ static ssize_t star_battery_voltage_now_store_property(
 		size_t count)
 {
 	struct battery_info *batt_info = refer_batt_info;
+#if BATT_RTC	
+	static unsigned int value = 0, last_cbc = 0;
+#else
 	static unsigned int value = 0;
-
+#endif
 	value = (unsigned int)(simple_strtoul(buf, NULL, 0));
 
 	DBG("AT_CBC event Voltage now : [%d]", value);
     batt_info->voltage_now = value;
 	return count;
 }
+
+//MOBII_CHNANGE_S 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
+#if defined(CONFIG_MACH_STAR_P990) || defined(CONFIG_MACH_STAR_SU660) || defined(CONFIG_MACH_STAR_P999)
+ssize_t ignore_uevent_store(struct device *dev,
+              struct device_attribute *attr,
+              const char *buf,
+              size_t count)
+{
+	if(buf[0] == '1') {
+    	printk("IGNORE SEND UEVENT FOR FOTA\n");
+    	ignore_send_uevent = TRUE;
+    } else if(buf[0] == '0') {
+    	printk("AVAILABLE SEND UEVENT FOR FOTA\n");
+    	ignore_send_uevent = FALSE;
+    }
+
+    return count;
+}
+#endif
+//MOBII_CHNANGE_E 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
+
 
 /* Sysfs Cmd. Declaration */
 DEVICE_ATTR(at_charge, S_IRUGO | S_IWUGO, star_at_charge_show_property, star_at_charge_store_property);
@@ -1807,6 +2185,11 @@ DEVICE_ATTR(true_gauge, S_IRUGO | S_IWUGO, star_cbc_show_property, star_cbc_stor
 DEVICE_ATTR(bat_gauge, S_IRUGO | S_IWUGO, star_battery_show_property, star_battery_store_property);	// hardware/ril/lge-ril/lge-ril.c
 DEVICE_ATTR(temp_control, S_IRUGO | S_IWUGO, star_temp_control_show_property, star_temp_control_store_property);/* HW requirement: temp control  */	
 DEVICE_ATTR(voltage_now, S_IRUGO | S_IWUGO, star_battery_voltage_now_show_property, star_battery_voltage_now_store_property);
+//MOBII_CHNANGE_S 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
+#if defined(CONFIG_MACH_STAR_P990) || defined(CONFIG_MACH_STAR_SU660) || defined(CONFIG_MACH_STAR_P999)
+DEVICE_ATTR(ignore_uevent, 0644, NULL, ignore_uevent_store);
+#endif
+//MOBII_CHNANGE_E 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
 
 static char *ac_usb_supplied_to[] = {
 	"battery",
@@ -1822,7 +2205,6 @@ static void star_initial_charger_state(void)
 
 	value_status = read_gpio_status();
 	value_pgb = read_gpio_pgb();
-	state = CHGSB_PGB_ON_OFF;
 
 	/* Read GPIO State */
 	if (( value_status == 1 )&& ( value_pgb == 1 ))
@@ -1872,10 +2254,9 @@ static void star_initial_charger_state(void)
 
 static int __init battery_probe(struct platform_device *pdev)
 {
+	DBG();
 	struct battery_info *batt_info;
 	int ret;
-
-	DBG();
 
 	batt_info = kzalloc(sizeof(*batt_info), GFP_KERNEL);
 	if (!batt_info)
@@ -1905,12 +2286,12 @@ static int __init battery_probe(struct platform_device *pdev)
 #endif
 	batt_info->polling_interval = BATTERY_POLLING_INTERVAL * HZ;
 	batt_info->sleep_polling_interval = SLEEP_BATTERY_CHECK_PERIOD;
-
+#if BATT_RTC
 	/* Initialize RTC Related Variables */
 	batt_info->last_cbc_time = 0;
 	batt_info->old_alarm_sec = 0;
 	batt_info->old_checkbat_sec = 0;
-
+#endif
 	/* Added Variable Initialization : In GB */
 	batt_info->RIL_ready = 0;
 	batt_info->boot_TA_setting = 0;
@@ -1922,7 +2303,7 @@ static int __init battery_probe(struct platform_device *pdev)
     batt_info->temp_control = TEMP_CONTROL_OFF;
 
 	/* Create Battery Workqueue */
-	batt_info->battery_workqueue = create_singlethread_workqueue("SU660_Battery_Workqueue");
+	batt_info->battery_workqueue = create_workqueue("SU660_Battery_Workqueue");
 	if( batt_info->battery_workqueue == NULL ) {
 		ret = -ENOMEM;
 		goto create_work_queue_fail;
@@ -1961,9 +2342,9 @@ static int __init battery_probe(struct platform_device *pdev)
 
 	/* Initialize Work Queue */
 	INIT_DELAYED_WORK_DEFERRABLE(&batt_info->star_monitor_work, battery_work);
-	INIT_DELAYED_WORK_DEFERRABLE(&batt_info->star_id_monitor_work, battery_id_work);
+//MBksjung  INIT_DELAYED_WORK_DEFERRABLE(&batt_info->star_id_monitor_work, battery_id_work);
 	queue_delayed_work(batt_info->battery_workqueue, &batt_info->star_monitor_work, 6 * HZ);
-	queue_delayed_work(batt_info->battery_workqueue, &batt_info->star_id_monitor_work, 2 * HZ);
+//MBksjung 	queue_delayed_work(batt_info->battery_workqueue, &batt_info->star_id_monitor_work, 2 * HZ);
 
 	/* Power Supply Register */
 	ret = power_supply_register(&pdev->dev, &batt_info->usb);
@@ -2029,6 +2410,15 @@ static int __init battery_probe(struct platform_device *pdev)
 		goto read_file_create_fail;
 	}
 #endif
+//MOBII_CHNANGE_S 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
+#if defined(CONFIG_MACH_STAR_P990) || defined(CONFIG_MACH_STAR_SU660) || defined(CONFIG_MACH_STAR_P999)
+	ret = device_create_file(&pdev->dev, &dev_attr_ignore_uevent);
+	if (ret)
+	{
+		goto ignore_uevent_file_create_fail;
+	}
+#endif
+//MOBII_CHNANGE_E 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
 
 	DBG("Sysfs register finished.");
 
@@ -2057,6 +2447,12 @@ dbatt_file_create_fail:
 	device_remove_file(&pdev->dev, &dev_attr_at_chomp);
 at_chomp_file_create_fail:
 	device_remove_file(&pdev->dev, &dev_attr_at_charge);
+//MOBII_CHNANGE_S 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
+#if defined(CONFIG_MACH_STAR_P990) || defined(CONFIG_MACH_STAR_SU660) || defined(CONFIG_MACH_STAR_P999)
+ignore_uevent_file_create_fail:
+	device_remove_file(&pdev->dev, &dev_attr_ignore_uevent);
+#endif
+//MOBII_CHNANGE_E 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
 at_charge_file_create_fail:
 	power_supply_unregister(&batt_info->usb);
 ac_online_failed:
@@ -2076,12 +2472,11 @@ static int battery_remove(struct platform_device *pdev)
 static int __exit battery_remove(struct platform_device *pdev)
 #endif
 {
+// MOBII_CHANGE_S [shhong@mobii.co.kr] 2012-04-27 : Kernel Panic Issue Solved.
+	DBG("Remove Sequence : Battery No Longer Exists.");
+// MOBII_CHANGE_E [shhong@mobii.co.kr] 2012-04-27 : Kernel Panic Issue Solved.
 	struct battery_info *batt_info = platform_get_drvdata(pdev);
 	bat_shutdown = 1;
-
-	// MOBII_CHANGE_S [shhong@mobii.co.kr] 2012-04-27 : Kernel Panic Issue Solved.
-	DBG("Remove Sequence : Battery No Longer Exists.");
-	// MOBII_CHANGE_E [shhong@mobii.co.kr] 2012-04-27 : Kernel Panic Issue Solved.
 
 	/* Disable Charger IC */
 	charger_ic_set_irq(0);
@@ -2089,7 +2484,7 @@ static int __exit battery_remove(struct platform_device *pdev)
 
 	/* Remove Device Works */
 	cancel_delayed_work_sync(&batt_info->star_monitor_work);
-	cancel_delayed_work_sync(&batt_info->star_id_monitor_work);
+//MBksjung	cancel_delayed_work_sync(&batt_info->star_id_monitor_work);
 	flush_workqueue(batt_info->battery_workqueue);
 	destroy_workqueue(batt_info->battery_workqueue);
 
@@ -2107,7 +2502,11 @@ static int __exit battery_remove(struct platform_device *pdev)
 	device_remove_file(&pdev->dev, &dev_attr_temp_control);
 	device_remove_file(&pdev->dev, &dev_attr_voltage_now);
 	device_remove_file(&pdev->dev, &dev_attr_readtempadc);
-
+//MOBII_CHNANGE_S 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
+#if defined(CONFIG_MACH_STAR_P990) || defined(CONFIG_MACH_STAR_SU660) || defined(CONFIG_MACH_STAR_P999)
+	device_remove_file(&pdev->dev, &dev_attr_ignore_uevent);
+#endif
+//MOBII_CHNANGE_E 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
 	/* Remove Driver Data */
 	platform_set_drvdata(pdev, NULL);
 	if(batt_info) {
@@ -2120,81 +2519,114 @@ static int __exit battery_remove(struct platform_device *pdev)
 static int battery_suspend(struct platform_device *pdev,
 		pm_message_t state)
 {
-	struct battery_info *batt_info;
+	struct battery_info *batt_info = platform_get_drvdata(pdev);
+#if BATT_RTC	
 	static unsigned int alarm_sec = 0, now_sec = 0, checkbat_sec = 0, next_alarm_sec = 0;
-
-	batt_info = platform_get_drvdata(pdev);
+	struct rtc_time tm;
+#endif
 	/* Not Factory Mode */
 	if( at_charge_index == 0 ) {
+#if BATT_RTC
+		/* RTC Setting & Alarm Setting Function */
 		if(max8907c_rtc_alarm_count_read(&alarm_sec) 
 			&& max8907c_rtc_count_read(&now_sec)) {
-
-			if (alarm_sec == batt_info->old_checkbat_sec)
+	
+			if (alarm_sec == batt_info->old_checkbat_sec) {
 				alarm_sec = batt_info->old_alarm_sec;
-			checkbat_sec = now_sec + batt_info->sleep_polling_interval;
-
-			if (batt_info->old_alarm_sec < now_sec)
-				batt_info->old_alarm_sec = 0;
-
-			if (batt_info->old_alarm_sec == 0) {
-				if (checkbat_sec < alarm_sec) {
-					next_alarm_sec = checkbat_sec;
-					batt_info->old_alarm_sec = alarm_sec;
-					batt_info->old_checkbat_sec = checkbat_sec;
-					max8907c_rtc_alarm_write(next_alarm_sec);
-				}
-			} else {
-				if ( (checkbat_sec <= alarm_sec) && (checkbat_sec < batt_info->old_alarm_sec) ) {
-					next_alarm_sec = checkbat_sec;
-					batt_info->old_alarm_sec = alarm_sec;
-					batt_info->old_checkbat_sec = checkbat_sec;
-					max8907c_rtc_alarm_write(next_alarm_sec);
-				}
-				else if ( (batt_info->old_alarm_sec <= alarm_sec) && (batt_info->old_alarm_sec <= checkbat_sec) ) {
-					if (now_sec <= batt_info->old_alarm_sec) {
-						next_alarm_sec = checkbat_sec;
-					} else {
-						next_alarm_sec = batt_info->old_alarm_sec;
-					}
-					batt_info->old_alarm_sec = 0;
-					batt_info->old_checkbat_sec = 0;
-					max8907c_rtc_alarm_write(next_alarm_sec);
-				}
 			}
-		}
-	}
+			checkbat_sec = now_sec + batt_info->sleep_polling_interval;
+			DBG("[CHG_RTC] alarm_sec=0x%x, now_sec=0x%x", alarm_sec, now_sec);
+			DBG("[CHG_RTC] old_alarm_sec=0x%x, checkbat_sec=0x%x", batt_info->old_alarm_sec, checkbat_sec);
+
+			if(batt_info->old_alarm_sec < now_sec) {
+				batt_info->old_alarm_sec = 0;
+			}
+
+			if ((BAT_MAX(checkbat_sec, alarm_sec) - BAT_MIN(checkbat_sec, alarm_sec)) > 20) {
+
+				if (batt_info->old_alarm_sec == 0) {
+					if (checkbat_sec < alarm_sec)   // next battery checking time is earlier than alarm time
+					{
+						next_alarm_sec = checkbat_sec;
+						batt_info->old_alarm_sec = alarm_sec;
+						batt_info->old_checkbat_sec = checkbat_sec;
+						if (max8907c_rtc_alarm_write(next_alarm_sec))
+						{
+							rtc_time_to_tm(next_alarm_sec, &tm);
+							DBG("rtc_write_to_tm: 1[%04d-%02d-%02d %02d:%02d:%02d]: write_time=0x%x ", 
+								(tm.tm_year + LINUX_RTC_BASE_YEAR), tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, next_alarm_sec);
+						} else {
+							DBG("[Warning] 1:CHG_RTC write Fail!!");
+						}
+						DBG("[CHG_RTC : final] next_alarm_sec=0x%x, old_alarm_sec=0x%x", next_alarm_sec, batt_info->old_alarm_sec);
+					}
+				} else {
+					if ((checkbat_sec <= alarm_sec) && (checkbat_sec <= batt_info->old_alarm_sec)) {
+						next_alarm_sec = checkbat_sec;
+						batt_info->old_alarm_sec = alarm_sec; // Assume: if alarm is changed, system determine new alarm is earlier than old alarm
+						batt_info->old_checkbat_sec = checkbat_sec;
+						if (max8907c_rtc_alarm_write(next_alarm_sec)) {
+							rtc_time_to_tm(next_alarm_sec, &tm);
+							DBG("rtc_write_to_tm: 2[%04d-%02d-%02d %02d:%02d:%02d]: write_time=0x%x ", 
+								(tm.tm_year + LINUX_RTC_BASE_YEAR), tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, next_alarm_sec);
+						} else {
+							DBG("[Warning] 2:CHG_RTC write Fail!!");
+						}
+						DBG("[CHG_RTC : final] next_alarm_sec=0x%x, old_alarm_sec=0x%x", next_alarm_sec, batt_info->old_alarm_sec);
+					} else if ( (batt_info->old_alarm_sec <= alarm_sec) && (batt_info->old_alarm_sec <= checkbat_sec) ) {
+						next_alarm_sec = batt_info->old_alarm_sec;
+						batt_info->old_alarm_sec = 0;
+						batt_info->old_checkbat_sec = 0;
+						if (max8907c_rtc_alarm_write(next_alarm_sec)) {
+							rtc_time_to_tm(next_alarm_sec, &tm);
+							DBG("rtc_write_to_tm: 3[%04d-%02d-%02d %02d:%02d:%02d]: write_time=0x%x ", 
+								(tm.tm_year + LINUX_RTC_BASE_YEAR), tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, next_alarm_sec);
+						} else {
+							DBG("[Warning] 3:CHG_RTC write Fail!!");
+						}
+						DBG("[CHG_RTC : final] next_alarm_sec=0x%x, old_alarm_sec=0x%x", next_alarm_sec, batt_info->old_alarm_sec);
+					}
+				}	// End of if (batt_info->old_alarm_sec == 0) 
+			}
+			DBG("Skipped this Process");
+		} else {
+			DBG("Reading RTC Value Failed.");
+		}	
+#else
+	// Do Nothing
+#endif
+	}	// End of if(at_charge_index == ...)
 	pdev->dev.power.power_state = state;
 
+	/* Cancel All works */
 	cancel_delayed_work_sync(&batt_info->star_monitor_work);
-	cancel_delayed_work_sync(&batt_info->star_id_monitor_work);
+//MBksjung	cancel_delayed_work_sync(&batt_info->star_id_monitor_work);
 
 	return 0;
 }
 
 static int battery_resume(struct platform_device *pdev)
 {
-	struct battery_info *batt_info;
-	batt_info = platform_get_drvdata(pdev);
+	struct battery_info *batt_info = platform_get_drvdata(pdev);
 
 	pdev->dev.power.power_state = PMSG_ON;
 
+	// Update & Resume All works 
+//Mobii_Change_S sgkim@mobii.co.kr 20120608- Speed up LCD On
 	battery_update_changes(batt_info, 1);
-	queue_delayed_work(batt_info->battery_workqueue, &batt_info->star_monitor_work, HZ*60);
-	queue_delayed_work(batt_info->battery_workqueue, &batt_info->star_id_monitor_work, HZ*60);
-
+	queue_delayed_work(batt_info->battery_workqueue, &batt_info->star_monitor_work, HZ*40);
+//MBksjung	queue_delayed_work(batt_info->battery_workqueue, &batt_info->star_id_monitor_work, HZ*2);
+//Mobii_Change_E sgkim@mobii.co.kr 20120608- Speed up LCD On
 	return 0;
 }
 
-static void battery_shutdown(struct platform_device *pdev)
+static int battery_shutdown(struct platform_device *pdev)
 {
-	struct battery_info *batt_info;
-
-	// MOBII_CHANGE_S [shhong@mobii.co.kr] 2012-04-27 : Kernel Panic Issue Solved.
+// MOBII_CHANGE_S [shhong@mobii.co.kr] 2012-04-27 : Kernel Panic Issue Solved.
 	DBG("Shutdown Sequence : Battery No Longer Exists.");
-	// MOBII_CHANGE_E [shhong@mobii.co.kr] 2012-04-27 : Kernel Panic Issue Solved.
-
+// MOBII_CHANGE_E [shhong@mobii.co.kr] 2012-04-27 : Kernel Panic Issue Solved.
+	struct battery_info *batt_info = platform_get_drvdata(pdev);
 	bat_shutdown = 1;
-	batt_info = platform_get_drvdata(pdev);
 
 	/* Disable Charger IC */
 	charger_ic_set_irq(0);
@@ -2202,7 +2634,7 @@ static void battery_shutdown(struct platform_device *pdev)
 
 	/* Remove Device Works */
 	cancel_delayed_work_sync(&batt_info->star_monitor_work);
-	cancel_delayed_work_sync(&batt_info->star_id_monitor_work);
+//MBksjung	cancel_delayed_work_sync(&batt_info->star_id_monitor_work);
 	flush_workqueue(batt_info->battery_workqueue);
 	destroy_workqueue(batt_info->battery_workqueue);
 
@@ -2215,13 +2647,18 @@ static void battery_shutdown(struct platform_device *pdev)
     device_remove_file(&pdev->dev, &dev_attr_temp_control);
 	device_remove_file(&pdev->dev, &dev_attr_voltage_now);
 	device_remove_file(&pdev->dev, &dev_attr_readtempadc);
-
+//MOBII_CHNANGE_S 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
+#if defined(CONFIG_MACH_STAR_P990) || defined(CONFIG_MACH_STAR_SU660) || defined(CONFIG_MACH_STAR_P999)
+	device_remove_file(&pdev->dev, &dev_attr_ignore_uevent);
+#endif
+//MOBII_CHNANGE_E 20120716 jd.park@mobii.co.kr : FOTA UA Upgrade for ICS
 	/* Remove Driver Data */
 	platform_set_drvdata(pdev, NULL);
 	if(batt_info) {
 		kfree(batt_info);
 		refer_batt_info = NULL;
 	}
+	return 0;
 }
 
 static struct platform_driver battery_driver =
