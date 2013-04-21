@@ -451,10 +451,6 @@ static void aat2870_bl_enable(struct backlight_device *bd)
 	int i;
 
 	dbg("enable\n");
-	if(is_suspended == true)
-	{
-		return 0;
-	}
 
 	if (drvdata->en_pin >= 0) {
 // LGE_CHANGE_S [youngseok.jeong@lge.com] 2011-01-17 [LGE_AP20] back-light
@@ -755,10 +751,6 @@ static int aat2870_bl_send_cmd(struct aat2870_bl_driver_data *drv, struct aat287
 {
         unsigned long delay = 0;
 
-	if(is_suspended == true)
-	{
-		return 0;
-	}
         if (tbl == NULL) {
                 dbg("input ptr is null\n");
                 return -EIO;
@@ -860,10 +852,6 @@ static ssize_t aat2870_bl_store_intensity(struct device *dev, struct device_attr
 	drv = aat2870_bl_drvdata;
 	if (!count)
 		return -EINVAL;
-	if(is_suspended == true)
-	{
-		return 0;
-	}
 
 	sscanf(buf, "%d", &intensity);	//level range: 0 to 22 from aat2870 ds
 
