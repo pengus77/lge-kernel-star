@@ -908,9 +908,11 @@ static struct tegra_dc_out_pin star_dc_out_pins[] = {
 	},
 };
 
+/*
 static u8 star_dc_out_pin_sel_config[] = {
 	TEGRA_PIN_OUT_CONFIG_SEL_LM1_M1,
 };
+*/
 
 static struct tegra_dc_out star_disp1_out = {
 	.type 		= TEGRA_DC_OUT_CPU,
@@ -1097,6 +1099,7 @@ static int __init star_android_boot_mode(char *arg)
 		bAndroidBootMode = 1;
 	else
 		bAndroidBootMode = 0;
+	return 0;
 }
 
 early_param("androidboot.mode", star_android_boot_mode);

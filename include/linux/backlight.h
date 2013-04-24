@@ -58,7 +58,7 @@ struct backlight_ops {
 	
 // MOBII_S [shhong@mobii.co.kr] 2012-05-07 : Auto Brightness Setting From P990.
 #if defined (CONFIG_MACH_STAR_P990) || (CONFIG_MACH_STAR_SU660)
-	int (*update_modestatus)(struct backlight_device *);
+	void (*update_modestatus)(struct backlight_device *);
 #endif
 // MOBII_E [shhong@mobii.co.kr] 2012-05-07 : Auto Brightness Setting From P990.
 };

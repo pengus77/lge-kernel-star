@@ -620,14 +620,12 @@ static int aat2870_bl_get_brightness(struct backlight_device *bd)
 
 // MOBII_S [shhong@mobii.co.kr] 2012-05-07 : Auto Brightness Setting From P990.
 #if defined(CONFIG_MACH_STAR_P990) || defined(CONFIG_MACH_STAR_SU660)
-static int aat2870_bl_update_modestatus(struct backlight_device *bd)
+static void aat2870_bl_update_modestatus(struct backlight_device *bd)
 {
 //MOBII_CHNANGE_S 20120819 ih.han@mobii.co.kr : Modify ALS table value
-    struct aat2870_bl_driver_data *drvdata = dev_get_drvdata(&bd->dev);
     int brightness_mode = bd->props.brightness_mode;
+    struct aat2870_bl_driver_data *drv = aat2870_bl_drvdata;
     int next_mode;
-    static struct aat2870_bl_driver_data *drv;
-    drv = aat2870_bl_drvdata;
 
     if(brightness_mode == 1)
     {
@@ -1126,7 +1124,7 @@ static ssize_t aat2870_bl_show_panel_info(struct device *dev, struct device_attr
 #undef	TEGRA_GPIO_PJ5
 #endif
 }
-static ssize_t aat2870_bl_store_panel_info(struct device *dev, struct device_attribute *attr, char *buf, size_t count)
+static ssize_t aat2870_bl_store_panel_info(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	return 0;
 }
