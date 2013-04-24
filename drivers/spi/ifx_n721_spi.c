@@ -58,6 +58,8 @@ static int IFX_MRDY;
 #include <linux/input.h>
 #define EVENT_KEY KEY_IPC_RECOVERY /* 197 */
 
+// #define LGE_DUMP_SPI_BUFFER
+
 typedef struct  spi_WatcherDeviceRec{
     struct input_dev *input;
 
