@@ -578,23 +578,12 @@ EXPORT_SYMBOL(g_is_suspend);
 static int star_panel_postpoweron(void)
 {
 	int i;
-#if 0 //MBksjung not used
 
-	if(bAndroidBootMode)
-	{		
-		// printk("\n AndroidBootMode Now (return star_panel_postpoweron)...... \n");
-		return 0;
-	}
-#endif
 	if(is_lcd_panel_poweron) // already power on
-	{
-		// printk("already power on\n");
 		return 0;
-	}
 
-	// printk("\n star_panel_postpoweron...... \n");
 #if defined(CONFIG_MACH_STAR)
-				g_is_suspend=1;
+	g_is_suspend=1;
 #endif
 
 	gpio_set_value(STAR_HITACHI_LCD_RESET, 0);
