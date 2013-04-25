@@ -43,8 +43,6 @@ extern TYPE_CHARGING_MODE get_muic_charger_type(void);
 
 #define TRICKLE_RECHECK
 
-#define TEMP_CONTROL_ON 1
-#define TEMP_CONTROL_OFF 0
 asmlinkage int bprintk(const char *fmt, ...)
 {
 	va_list args;
@@ -101,7 +99,6 @@ struct battery_info {
 	struct workqueue_struct	*battery_workqueue;
 	struct delayed_work	star_monitor_work;
 	struct delayed_work	star_id_monitor_work;
-        unsigned int		temp_control; //for Charging test
 
 	unsigned long		update_time;
 	unsigned long		last_cbc_time;
@@ -142,7 +139,6 @@ struct battery_info {
 	int				prev_capacity;
 	int				prev_health;
 
-	int				force_update;
 #if defined (TRICKLE_RECHECK)
 	unsigned char			trickle_charge_check;
 #endif
@@ -152,8 +148,6 @@ struct battery_info {
 };
 static struct battery_info *refer_batt_info = NULL;
 
-/*for battery update*/
-extern int g_is_suspend;
 /* Battery Mutex */
 static DEFINE_MUTEX(battery_mutex);
 
@@ -276,6 +270,11 @@ static void battery_update(struct battery_info *batt_info)
 			batt_info->charge_type = POWER_SUPPLY_TYPE_UPS;
 			break;
 		case CHARGING_NONE:
+#if defined (TRICKLE_RECHECK)
+			batt_info->trickle_charge_check = 0;
+#endif
+			batt_info->charge_type = POWER_SUPPLY_TYPE_BATTERY;
+			break;
 		default:
 #if defined (TRICKLE_RECHECK)
 			batt_info->trickle_charge_check = 0;
@@ -690,7 +689,7 @@ static void star_set_recharge_again(void)
 }
 #endif // TRICKLE_RECHECK
 
-static void battery_update_changes(struct battery_info *batt_info, int force_update)
+static void battery_update_changes(struct battery_info *batt_info)
 {
 	battery_update(batt_info);
 
@@ -723,26 +722,20 @@ static void battery_update_changes(struct battery_info *batt_info, int force_upd
 		}
 	}
 
-	//	if( force_update == 0 )
-	{
-		/* Trickle Recheck */
+	/* Trickle Recheck */
 #if defined(TRICKLE_RECHECK)
-		if ((batt_info->trickle_charge_check == 1) && (batt_info->voltage < 4000))
-			star_set_recharge_again();
+	if ((batt_info->trickle_charge_check == 1) && (batt_info->voltage < 4000))
+		star_set_recharge_again();
 #endif // TRICKLE_RECHECK
 
-		/* Gauge Follower Function Called */
-		if( (batt_info->gauge_on == 1) && (batt_info->capacity != batt_info->capacity_gauge) )
-			star_gauge_follower_func();
+	/* Gauge Follower Function Called */
+	if( (batt_info->gauge_on == 1) && (batt_info->capacity != batt_info->capacity_gauge) )
+		star_gauge_follower_func();
 
-		/* Changes Polling Period */
-		battery_data_polling_period_change();
-	}
+	/* Changes Polling Period */
+	battery_data_polling_period_change();
 
 	power_supply_changed(&batt_info->bat);
-
-	//	power_supply_changed(&batt_info->usb);
-	//	power_supply_changed(&batt_info->ac);
 }
 
 /* MODE For MUIC */
@@ -761,8 +754,6 @@ void charger_ic_set_mode_for_muic(unsigned int mode)
 				case CHARGER_ISET:
 				case CHARGER_FACTORY:
 					power_supply_changed(&refer_batt_info->bat);
-					//power_supply_changed(&refer_batt_info->usb);
-					//power_supply_changed(&refer_batt_info->ac);
 					break;
 
 				default:
@@ -774,19 +765,7 @@ void charger_ic_set_mode_for_muic(unsigned int mode)
 	if (refer_batt_info->health != POWER_SUPPLY_HEALTH_GOOD)
 	{
 		refer_batt_info->health = POWER_SUPPLY_HEALTH_GOOD;
-#if 1
 		charger_contol_with_battery_temp();
-#else
-		if (refer_batt_info->temp_control == TEMP_CONTROL_OFF)
-		{
-			charger_contol_with_battery_temp();
-		}
-		else //TEMP_CONTROL_ON
-		{
-			charger_contorl_unlimited_temp();
-		}
-#endif		
-
 	}
 }
 EXPORT_SYMBOL(charger_ic_set_mode_for_muic);
@@ -811,7 +790,7 @@ void notification_of_changes_to_battery(void)
 
 	// Update Battery Information
 	cancel_delayed_work_sync(&refer_batt_info->star_monitor_work);
-	battery_update_changes(refer_batt_info, 1);
+	battery_update_changes(refer_batt_info);
 	queue_delayed_work(refer_batt_info->battery_workqueue, &refer_batt_info->star_monitor_work, 10 * HZ);
 }
 
@@ -824,7 +803,7 @@ static void battery_work(struct work_struct *work)
 	struct battery_info *batt_info;
 	batt_info = refer_batt_info;
 
-	battery_update_changes(batt_info, 0);
+	battery_update_changes(batt_info);
 	queue_delayed_work(batt_info->battery_workqueue, &batt_info->star_monitor_work, batt_info->polling_interval);
 }
 
@@ -856,7 +835,6 @@ static void battery_id_check(void)
 			charger_ic_set_mode_for_muic(CHARGER_ISET);
 		}
 	}
-
 }
 
 static void battery_id_work(struct work_struct *work)
@@ -898,16 +876,9 @@ static int battery_get_property(struct power_supply *psy,
 					  if(charger_ic_get_status() != CHARGER_DISABLE)
 					  {
 					  	if((batt_info->capacity != 100))
-					  	{
-					  		if(batt_info->temp_control == TEMP_CONTROL_OFF)
-								val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
-							else
-								val->intval = POWER_SUPPLY_STATUS_CHARGING;
-					  	}
+							val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
 						else
-						{
 							val->intval = POWER_SUPPLY_STATUS_FULL;
-						}
 					  }
 					  else
 					  	val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
@@ -916,28 +887,10 @@ static int battery_get_property(struct power_supply *psy,
 			{
 					 if(charger_ic_get_status() != CHARGER_DISABLE)
 					 {
-						if(batt_info->temp_control == TEMP_CONTROL_OFF)
-					 	{
-						   if(batt_info->high_temp_overvoltage==1)
-						   	{
-						   		val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
-						   	}
-						    else
-					    	{
-					    		val->intval = POWER_SUPPLY_STATUS_CHARGING;	
-					    	}
-					 	}
-						else
-						{
-							if((batt_info->capacity != 100))
-						  	{
-								val->intval = POWER_SUPPLY_STATUS_CHARGING;
-							}
-							else
-							{
-								val->intval = POWER_SUPPLY_STATUS_FULL;
-							}
-						}
+						 if(batt_info->high_temp_overvoltage==1)
+						   	val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
+						 else
+							 val->intval = POWER_SUPPLY_STATUS_CHARGING;
 					 }
 	         		 else
 					 	val->intval = POWER_SUPPLY_STATUS_DISCHARGING;	
@@ -1013,43 +966,29 @@ static int battery_get_property(struct power_supply *psy,
 	return 0;
 }
 
-static int ac_battery_get_property(struct power_supply *psy,
+static int power_battery_get_property(struct power_supply *psy,
 		enum power_supply_property psp,
 		union power_supply_propval *val)
 {
-	switch (psp) {
-		case POWER_SUPPLY_PROP_ONLINE:
-			{				
-				TYPE_CHARGING_MODE muic_mode = CHARGING_NONE;
-				muic_mode = get_muic_charger_type();
-				if ( muic_mode == CHARGING_TA_1A
-						|| muic_mode == CHARGING_NA_TA
-						|| muic_mode == CHARGING_LG_TA)
-					val->intval = 1;
-				else
-					val->intval = 0;
-			}
-			break;
-		default:
-			val->intval = 0;
-			return -EINVAL;
-	}
-	return 0;
-}
+	TYPE_CHARGING_MODE muic_mode = CHARGING_NONE;
+	muic_mode = get_muic_charger_type();
 
-static int usb_battery_get_property(struct power_supply *psy,
-		enum power_supply_property psp,
-		union power_supply_propval *val)
-{
 	switch (psp) {
 		case POWER_SUPPLY_PROP_ONLINE:
+			switch (muic_mode)
 			{
-				TYPE_CHARGING_MODE muic_mode = CHARGING_NONE;
-				muic_mode = get_muic_charger_type();
-				if ( muic_mode == CHARGING_USB)
-					val->intval = 1;
-				else
-					val->intval = 0;		
+				case CHARGING_LG_TA:
+					val->intval = POWER_SUPPLY_TYPE_MAINS;
+					break;
+				case CHARGING_USB:
+					val->intval = POWER_SUPPLY_TYPE_USB;
+					break;
+				case CHARGING_NONE:
+					val->intval = POWER_SUPPLY_TYPE_BATTERY;
+					break;
+				default:
+					val->intval = POWER_SUPPLY_TYPE_BATTERY;
+					break;
 			}
 			break;
 		default:
@@ -1058,7 +997,6 @@ static int usb_battery_get_property(struct power_supply *psy,
 	}
 	return 0;
 }
-//#endif
 
 /* Sysfs Cmd. Func Declaration - AT CHARGE */
 static ssize_t star_at_charge_show_property(
@@ -1085,7 +1023,7 @@ static ssize_t star_at_charge_store_property(
 	if ( value == 1 )
 	{
 		at_charge_index = 1;
-		battery_update_changes(batt_info, 1);	// 0 or 1 Doesn't care
+		battery_update_changes(batt_info);
 		charger_ic_set_mode_for_muic(CHARGER_ISET);
 	}
 	return count;
@@ -1100,7 +1038,7 @@ static ssize_t star_at_chcomp_show_property(
 	struct battery_info *batt_info = refer_batt_info;
 	size_t count = 0;
 
-	battery_update_changes(batt_info, 1);	// 0 or 1 Doesn't care
+	battery_update_changes(batt_info);
 	if (( batt_info->voltage >= 4100 ) || ( at_charge_comp == 1 ))
 	{
 		batt_info->capacity = 95;
@@ -1255,7 +1193,7 @@ static ssize_t star_cbc_store_property(
 		}
 	}
 
-	battery_update_changes(batt_info,0); //for half charging
+	battery_update_changes(batt_info);
 	return count;
 }
 
@@ -1364,168 +1302,129 @@ static void valid_cbc_check_and_process(unsigned int value)  // not used  yet
 	if( bat_shutdown == 1 )
 		return;
 
-	//	if( at_charge_index == 0 )
-	{
 #if defined(TRICKLE_RECHECK)
-		if ((batt_info->trickle_charge_check == 1) && (value <=94))
+	if ((batt_info->trickle_charge_check == 1) && (value <=94))
+	{
+		if (batt_info->CBC_value >= value) // gauge_value reduce continuously... even if charger is in Recharge condition!!!
 		{
-			if (batt_info->CBC_value >= value) // gauge_value reduce continuously... even if charger is in Recharge condition!!!
-			{
-				star_set_recharge_again();
-			}
+			star_set_recharge_again();
 		}
+	}
 #endif // TRICKLE_RECHECK
 
-		batt_info->CBC_value = value;
-		battery_update(batt_info);
-		star_capacity_from_voltage_via_calculate();
+	batt_info->CBC_value = value;
+	battery_update(batt_info);
+	star_capacity_from_voltage_via_calculate();
 
-		if ( value <= 3 )
-			display_cbc = 1;
-		else if ( value >= 95 )
-			display_cbc = 100;
-		else if (( value >= 92 ) && ( value < 95 ))
-			display_cbc = 99;
-		else
-			display_cbc = ( (value-2) * 100 / 91 );
+	if ( value <= 3 )
+		display_cbc = 1;
+	else if ( value >= 95 )
+		display_cbc = 100;
+	else if (( value >= 92 ) && ( value < 95 ))
+		display_cbc = 99;
+	else
+		display_cbc = ( (value-2) * 100 / 91 );
 
-		if (batt_info->voltage <= 3400)
-			display_cbc = 0;
+	if (batt_info->voltage <= 3400)
+		display_cbc = 0;
 
-		if( batt_info->gauge_on == 0 )
+	if( batt_info->gauge_on == 0 )
+	{
+		if( value <= 2 )
 		{
-			if( value <= 2 )
+			if (((batt_info->voltage < 3500) || (batt_info->capacity <= 5)))
 			{
-				if (((batt_info->voltage < 3500) || (batt_info->capacity <= 5)))
-				{
-					batt_info->capacity = 1;
-					batt_info->capacity_gauge = 1;
-					batt_info->gauge_on = 1;
-				}
-				else	
-				{
-					batt_info->capacity_gauge = display_cbc;
-#if 0 // defined(CONFIG_MACH_STAR_P990)
-					batt_info->capacity = display_cbc;
-					batt_info->gauge_on = 1;
-#endif
-				}
-			}
-			else if( value == 100 )
-			{
-				if (((batt_info->voltage > 4100) || (batt_info->capacity >= 93)))
-				{
-					batt_info->capacity = 100;
-					batt_info->capacity_gauge = 100;
-					batt_info->gauge_on = 1;
-				}
-				else 	batt_info->capacity_gauge = display_cbc;
+				batt_info->capacity = 1;
+				batt_info->capacity_gauge = 1;
+				batt_info->gauge_on = 1;
 			}
 			else
 			{
-				batt_info->capacity = display_cbc;
 				batt_info->capacity_gauge = display_cbc;
+			}
+		}
+		else if( value == 100 )
+		{
+			if (((batt_info->voltage > 4100) || (batt_info->capacity >= 93)))
+			{
+				batt_info->capacity = 100;
+				batt_info->capacity_gauge = 100;
 				batt_info->gauge_on = 1;
 			}
-		}
-
-		if ( batt_info->gauge_on == 1 )
-		{
-			if( batt_info->capacity != 104 )			// at first process, do not update
-				previous_gauge = batt_info->capacity;		// save previous value
-
-			if( value <= 2 )
+			else
 			{
-				if((batt_info->voltage < 3450) || (batt_info->capacity <= 3)) 
-				{
-					batt_info->capacity = 1;
-					batt_info->capacity_gauge = 1;
-				}
-				else if((batt_info->voltage < 3400) || (batt_info->capacity <= 3))
-				{
-					batt_info->capacity = 0;
-					batt_info->capacity_gauge = 0;
-				}
-			}
-			else if( value == 100 )
-			{
-				if((batt_info->voltage > 4130) || (batt_info->capacity >= 96))
-				{	
-					batt_info->capacity = 100;
-					batt_info->capacity_gauge = 100;
-				}
-			}
-			else // ( 0 < cbc_value < 100 )
-			{
-				if( display_cbc >= batt_info->capacity ) 
-				{
-					if((display_cbc - batt_info->capacity) <= 1)
-					{
-						batt_info->capacity = display_cbc;
-						batt_info->capacity_gauge = display_cbc;
-					}
-					else if((display_cbc - batt_info->capacity) > 1)
-					{	
-						batt_info->capacity_gauge = display_cbc;
-						star_gauge_follower_func();
-					}
-				}
-				else if( display_cbc < batt_info->capacity ) 
-				{
-					if ((batt_info->capacity - display_cbc) <= 1)
-					{
-						batt_info->capacity = display_cbc;
-						batt_info->capacity_gauge = display_cbc;
-					}
-					else if ((batt_info->capacity - display_cbc) > 1)
-					{
-						batt_info->capacity_gauge = display_cbc;
-						star_gauge_follower_func();
-					}
-				}
 				batt_info->capacity_gauge = display_cbc;
-
-				if (batt_info->capacity < 0)	batt_info->capacity = 0;
-				if (batt_info->capacity > 100)	batt_info->capacity = 100;
 			}
-
-			if( ((charger_ic_get_status() == CHARGER_DISABLE) 
-						|| (charger_ic_get_state() == CHARGER_STATE_FULLBATTERY))
-					&& previous_gauge < batt_info->capacity )
-				batt_info->capacity = previous_gauge;
-
-			battery_update(batt_info);
-			power_supply_changed(&batt_info->bat);
+		}
+		else
+		{
+			batt_info->capacity = display_cbc;
+			batt_info->capacity_gauge = display_cbc;
+			batt_info->gauge_on = 1;
 		}
 	}
-}
-/* HW requirement: temp control  _S*/
-static ssize_t star_temp_control_show_property(
-		struct device *dev,
-		struct device_attribute *attr,
-		char *buf)
-{
-	struct battery_info *batt_info = refer_batt_info;
-	return sprintf(buf, "%d\n", batt_info->temp_control);
-}
-static ssize_t star_temp_control_store_property(
-		struct device *dev,
-		struct device_attribute *attr,
-		const char *buf,
-		size_t count)
-{
-		struct battery_info *batt_info = refer_batt_info;
-		static unsigned int value = 0;
 
-		value = (unsigned int)(simple_strtoul(buf, NULL, 0));
+	if ( batt_info->gauge_on == 1 )
+	{
+		batt_info->prev_capacity = batt_info->capacity;
+		if( batt_info->capacity != 104 )			// at first process, do not update
+			previous_gauge = batt_info->capacity;		// save previous value
 
-		batt_info->temp_control = value;
-		batt_info->health = POWER_SUPPLY_HEALTH_GOOD;
-		battery_update_changes(batt_info, 0);
-		return count;
+		if( value <= 2 )
+		{
+			if((batt_info->voltage < 3450) || (batt_info->capacity <= 3))
+			{
+				batt_info->capacity = 1;
+				batt_info->capacity_gauge = 1;
+			}
+			else if((batt_info->voltage < 3400) || (batt_info->capacity <= 3))
+			{
+				batt_info->capacity = 0;
+				batt_info->capacity_gauge = 0;
+			}
+		}
+		else if( value == 100 )
+		{
+			if((batt_info->voltage > 4130) || (batt_info->capacity >= 96))
+			{
+				batt_info->capacity = 100;
+				batt_info->capacity_gauge = 100;
+			}
+		}
+		else // ( 0 < cbc_value < 100 )
+		{
+			batt_info->capacity_gauge = display_cbc;
 
+			if( display_cbc >= batt_info->capacity )
+			{
+				if((display_cbc - batt_info->capacity) <= 1)
+					batt_info->capacity = display_cbc;
+				else if((display_cbc - batt_info->capacity) > 1)
+					star_gauge_follower_func();
+			}
+			else if( display_cbc < batt_info->capacity )
+			{
+				if ((batt_info->capacity - display_cbc) <= 1)
+					batt_info->capacity = display_cbc;
+				else if ((batt_info->capacity - display_cbc) > 1)
+					star_gauge_follower_func();
+			}
+
+			if (batt_info->capacity < 0)	batt_info->capacity = 0;
+			if (batt_info->capacity > 100)	batt_info->capacity = 100;
+		}
+
+		if( ((charger_ic_get_status() == CHARGER_DISABLE)
+				|| (charger_ic_get_state() == CHARGER_STATE_FULLBATTERY))
+				&& previous_gauge < batt_info->capacity )
+		{
+			batt_info->capacity = previous_gauge;
+		}
+
+		battery_update(batt_info);
+		power_supply_changed(&batt_info->bat);
+	}
 }
-/* HW requirement: temp control  _E*/
 
 static ssize_t star_battery_show_property(
 		struct device *dev,
@@ -1597,7 +1496,6 @@ DEVICE_ATTR(at_chomp, S_IRUGO | S_IWUGO, star_at_chcomp_show_property, star_at_c
 DEVICE_ATTR(dbatt, S_IRUGO | S_IWUGO, star_debug_show_property, star_debug_store_property);
 DEVICE_ATTR(true_gauge, S_IRUGO | S_IWUGO, star_cbc_show_property, star_cbc_store_property);
 DEVICE_ATTR(bat_gauge, S_IRUGO | S_IWUGO, star_battery_show_property, star_battery_store_property);	// hardware/ril/lge-ril/lge-ril.c
-DEVICE_ATTR(temp_control, S_IRUGO | S_IWUGO, star_temp_control_show_property, star_temp_control_store_property);/* HW requirement: temp control  */	
 DEVICE_ATTR(voltage_now, S_IRUGO | S_IWUGO, star_battery_voltage_now_show_property, star_battery_voltage_now_store_property);
 
 static char *ac_usb_supplied_to[] = {
@@ -1703,8 +1601,6 @@ static int __init battery_probe(struct platform_device *pdev)
 	batt_info->prev_voltage = batt_info->voltage;
 	batt_info->prev_temperature = batt_info->temperature;
 
-    batt_info->temp_control = TEMP_CONTROL_OFF;
-
 	/* Create Battery Workqueue */
 	batt_info->battery_workqueue = create_singlethread_workqueue("SU660_Battery_Workqueue");
 	if( batt_info->battery_workqueue == NULL ) {
@@ -1725,7 +1621,7 @@ static int __init battery_probe(struct platform_device *pdev)
 	batt_info->usb.num_supplicants = ARRAY_SIZE(ac_usb_supplied_to);
 	batt_info->usb.properties = ac_usb_battery_props;
 	batt_info->usb.num_properties = ARRAY_SIZE(ac_usb_battery_props);
-	batt_info->usb.get_property = usb_battery_get_property;
+	batt_info->usb.get_property = power_battery_get_property;
 
 	batt_info->ac.name = "ac";
 	batt_info->ac.type = POWER_SUPPLY_TYPE_MAINS;
@@ -1733,7 +1629,7 @@ static int __init battery_probe(struct platform_device *pdev)
 	batt_info->ac.num_supplicants = ARRAY_SIZE(ac_usb_supplied_to);
 	batt_info->ac.properties = ac_usb_battery_props;
 	batt_info->ac.num_properties = ARRAY_SIZE(ac_usb_battery_props);
-	batt_info->ac.get_property = ac_battery_get_property;
+	batt_info->ac.get_property = power_battery_get_property;
 
 	platform_set_drvdata(pdev, batt_info);
 
@@ -1784,13 +1680,6 @@ static int __init battery_probe(struct platform_device *pdev)
 	if (ret)
 	{
 		goto bat_gauge_file_create_fail;
-	} 
-
-	/* Battery Temp control Info. */
-	ret = device_create_file(&pdev->dev, &dev_attr_temp_control);
-	if (ret)
-	{
-		goto temp_control_file_create_fail;
 	}
 
 	ret = device_create_file(&pdev->dev, &dev_attr_voltage_now);
@@ -1808,10 +1697,7 @@ static int __init battery_probe(struct platform_device *pdev)
 	}
 #endif
 
-	/* Battery Information Updates */ 
-	batt_info->force_update = 1;
-	battery_update_changes(batt_info, 0);
-	//battery_update(batt_info);
+	battery_update_changes(batt_info);
 
 	return 0;
 
@@ -1820,9 +1706,6 @@ read_file_create_fail:
 
 voltage_now_file_create_fail:
 	device_remove_file(&pdev->dev, &dev_attr_voltage_now);
-
-temp_control_file_create_fail:
-	device_remove_file(&pdev->dev, &dev_attr_temp_control);
 
 bat_gauge_file_create_fail:
 	device_remove_file(&pdev->dev, &dev_attr_true_gauge);
@@ -1875,7 +1758,6 @@ static int __exit battery_remove(struct platform_device *pdev)
 	device_remove_file(&pdev->dev, &dev_attr_dbatt);
 	device_remove_file(&pdev->dev, &dev_attr_true_gauge);
 	device_remove_file(&pdev->dev, &dev_attr_bat_gauge);
-	device_remove_file(&pdev->dev, &dev_attr_temp_control);
 	device_remove_file(&pdev->dev, &dev_attr_voltage_now);
 	device_remove_file(&pdev->dev, &dev_attr_readtempadc);
 
@@ -1949,7 +1831,7 @@ static int battery_resume(struct platform_device *pdev)
 
 	pdev->dev.power.power_state = PMSG_ON;
 
-	battery_update_changes(batt_info, 1);
+	battery_update_changes(batt_info);
 	queue_delayed_work(batt_info->battery_workqueue, &batt_info->star_monitor_work, HZ*60);
 	queue_delayed_work(batt_info->battery_workqueue, &batt_info->star_id_monitor_work, HZ*60);
 
@@ -1979,7 +1861,6 @@ static void battery_shutdown(struct platform_device *pdev)
 	device_remove_file(&pdev->dev, &dev_attr_dbatt);
 	device_remove_file(&pdev->dev, &dev_attr_true_gauge); 
 	device_remove_file(&pdev->dev, &dev_attr_bat_gauge);
-    device_remove_file(&pdev->dev, &dev_attr_temp_control);
 	device_remove_file(&pdev->dev, &dev_attr_voltage_now);
 	device_remove_file(&pdev->dev, &dev_attr_readtempadc);
 
