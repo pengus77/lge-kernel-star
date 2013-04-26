@@ -98,7 +98,6 @@ struct battery_info {
 
 	struct workqueue_struct	*battery_workqueue;
 	struct delayed_work	star_monitor_work;
-	struct delayed_work	star_id_monitor_work;
 
 	unsigned long		update_time;
 	unsigned long		last_cbc_time;
@@ -807,50 +806,6 @@ static void battery_work(struct work_struct *work)
 	queue_delayed_work(batt_info->battery_workqueue, &batt_info->star_monitor_work, batt_info->polling_interval);
 }
 
-/* Battery ID Polling */
-static void battery_id_check(void)
-{
-	struct battery_info *batt_info;
-	int batt_temperature;
-
-	batt_info			= refer_batt_info;
-	batt_temperature	= battery_read_temperature();
-
-	if ( at_charge_index == 0 )
-	{
-		if (( -400 > batt_temperature ) || ( 900 < batt_temperature )) // Temperature range -40 ~ 90 [C]: Battery present
-		{
-			if ( (charger_ic_get_status() != CHARGER_DISABLE) && ( at_boot_state == 0 ) )
-			{
-        		batt_info->present = 0;
-				power_supply_changed(&batt_info->bat);
-			}
-		}
-	}
-	else // ( at_charge_index == 1 )
-	{
-		if ((charger_ic_get_status() == CHARGER_DISABLE) && (at_charge_on == 0))
-		{
-			at_charge_on = 1;
-			charger_ic_set_mode_for_muic(CHARGER_ISET);
-		}
-	}
-}
-
-static void battery_id_work(struct work_struct *work)
-{
-	struct battery_info *batt_info = container_of(work,
-			struct battery_info, star_id_monitor_work.work);
-
-	if ((( at_charge_index == 0 ) && ( charger_ic_get_status() != CHARGER_DISABLE ))
-			|| (( at_charge_index == 1 ) && ( charger_ic_get_status() == CHARGER_DISABLE )))
-	{
-		battery_id_check();
-	}
-
-	queue_delayed_work(batt_info->battery_workqueue, &batt_info->star_id_monitor_work, batt_info->id_polling_interval);
-}
-
 #define to_battery_info(x) container_of((x), \
 		struct battery_info, bat);
 
@@ -873,29 +828,28 @@ static int battery_get_property(struct power_supply *psy,
 			else if ((batt_info->health == POWER_SUPPLY_HEALTH_CRITICAL_OVERHEAT) 
 					|| (batt_info->health == POWER_SUPPLY_HEALTH_COLD))
 			{
-					  if(charger_ic_get_status() != CHARGER_DISABLE)
-					  {
-					  	if((batt_info->capacity != 100))
-							val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
-						else
-							val->intval = POWER_SUPPLY_STATUS_FULL;
-					  }
-					  else
-					  	val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
+				if(charger_ic_get_status() != CHARGER_DISABLE)
+				{
+					if((batt_info->capacity != 100))
+						val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
+					else
+						val->intval = POWER_SUPPLY_STATUS_FULL;
 				}
+				else
+					val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
+			}
 			else if((batt_info->health == POWER_SUPPLY_HEALTH_OVERHEAT))
 			{
-					 if(charger_ic_get_status() != CHARGER_DISABLE)
-					 {
-						 if(batt_info->high_temp_overvoltage==1)
-						   	val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
-						 else
-							 val->intval = POWER_SUPPLY_STATUS_CHARGING;
-					 }
-	         		 else
-					 	val->intval = POWER_SUPPLY_STATUS_DISCHARGING;	
+				if(charger_ic_get_status() != CHARGER_DISABLE)
+				{
+					if(batt_info->high_temp_overvoltage==1)
+						val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
+					else
+						val->intval = POWER_SUPPLY_STATUS_CHARGING;
 				}
-
+				else
+					val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
+			}
 			else if ((batt_info->capacity == 100) 
 					&& (charger_ic_get_status() != CHARGER_DISABLE))
 			{
@@ -903,10 +857,10 @@ static int battery_get_property(struct power_supply *psy,
 			}
 			else if (charger_ic_get_status() != CHARGER_DISABLE) // POWER_SUPPLY_STATUS_CHARGING
 			{
-			    if(muic_charging_mode == CHARGING_NONE) {
-			        val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
+				if(muic_charging_mode == CHARGING_NONE) {
+					val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
 					charger_ic_disable();
-			    } else {
+				} else {
 					val->intval = POWER_SUPPLY_STATUS_CHARGING;
 				}
 			}
@@ -970,24 +924,23 @@ static int power_battery_get_property(struct power_supply *psy,
 		enum power_supply_property psp,
 		union power_supply_propval *val)
 {
-	TYPE_CHARGING_MODE muic_mode = CHARGING_NONE;
-	muic_mode = get_muic_charger_type();
+	TYPE_CHARGING_MODE muic_charging_mode;
+	muic_charging_mode = get_muic_charger_type();
 
 	switch (psp) {
 		case POWER_SUPPLY_PROP_ONLINE:
-			switch (muic_mode)
+			switch (muic_charging_mode)
 			{
 				case CHARGING_LG_TA:
+				case CHARGING_NA_TA:
+				case CHARGING_TA_1A:
 					val->intval = POWER_SUPPLY_TYPE_MAINS;
 					break;
 				case CHARGING_USB:
 					val->intval = POWER_SUPPLY_TYPE_USB;
 					break;
-				case CHARGING_NONE:
-					val->intval = POWER_SUPPLY_TYPE_BATTERY;
-					break;
 				default:
-					val->intval = POWER_SUPPLY_TYPE_BATTERY;
+					val->intval = 0;
 					break;
 			}
 			break;
@@ -1639,9 +1592,7 @@ static int __init battery_probe(struct platform_device *pdev)
 
 	/* Initialize Work Queue */
 	INIT_DELAYED_WORK_DEFERRABLE(&batt_info->star_monitor_work, battery_work);
-	INIT_DELAYED_WORK_DEFERRABLE(&batt_info->star_id_monitor_work, battery_id_work);
 	queue_delayed_work(batt_info->battery_workqueue, &batt_info->star_monitor_work, 6 * HZ);
-	queue_delayed_work(batt_info->battery_workqueue, &batt_info->star_id_monitor_work, 2 * HZ);
 
 	/* Power Supply Register */
 	ret = power_supply_register(&pdev->dev, &batt_info->usb);
@@ -1743,7 +1694,6 @@ static int __exit battery_remove(struct platform_device *pdev)
 
 	/* Remove Device Works */
 	cancel_delayed_work_sync(&batt_info->star_monitor_work);
-	cancel_delayed_work_sync(&batt_info->star_id_monitor_work);
 	flush_workqueue(batt_info->battery_workqueue);
 	destroy_workqueue(batt_info->battery_workqueue);
 
@@ -1819,7 +1769,6 @@ static int battery_suspend(struct platform_device *pdev,
 	pdev->dev.power.power_state = state;
 
 	cancel_delayed_work_sync(&batt_info->star_monitor_work);
-	cancel_delayed_work_sync(&batt_info->star_id_monitor_work);
 
 	return 0;
 }
@@ -1833,7 +1782,6 @@ static int battery_resume(struct platform_device *pdev)
 
 	battery_update_changes(batt_info);
 	queue_delayed_work(batt_info->battery_workqueue, &batt_info->star_monitor_work, HZ*60);
-	queue_delayed_work(batt_info->battery_workqueue, &batt_info->star_id_monitor_work, HZ*60);
 
 	return 0;
 }
@@ -1851,7 +1799,6 @@ static void battery_shutdown(struct platform_device *pdev)
 
 	/* Remove Device Works */
 	cancel_delayed_work_sync(&batt_info->star_monitor_work);
-	cancel_delayed_work_sync(&batt_info->star_id_monitor_work);
 	flush_workqueue(batt_info->battery_workqueue);
 	destroy_workqueue(batt_info->battery_workqueue);
 
