@@ -51,7 +51,7 @@
 #define STAR_FW_VERSION
 // MOBII_E [shhong@mobii.co.kr] 2012-05-02 : For Touch Firmware Version.
 
-// #define LGE_NOMELT
+#define LGE_NOMELT
 
 #define GET_BIT_MASK(_finger_state_reg)	\
 		(_finger_state_reg[2] & 0x04)<<7 | (_finger_state_reg[2] & 0x01)<<8 |	\
