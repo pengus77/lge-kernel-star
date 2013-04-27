@@ -30,7 +30,7 @@
 #include <linux/muic.h>
 #include <linux/max8922l.h>
 #include <linux/mfd/max8907c.h>
-#include <linux/su660_battery.h>
+#include <linux/kowalski_battery.h>
 #include "su660_battery_temp.h"
 
 extern int max8907c_rtc_alarm_write(unsigned int count);
@@ -38,10 +38,10 @@ extern int max8907c_rtc_count_write(unsigned int count);
 extern int max8907c_rtc_alarm_count_read(unsigned int *count);
 extern int max8907c_rtc_count_read(unsigned int *count);
 
+extern void charger_ic_disable_for_recharge(void);
+
 /* Extern MUIC Function */
 extern TYPE_CHARGING_MODE get_muic_charger_type(void);
-
-#define TRICKLE_RECHECK
 
 asmlinkage int bprintk(const char *fmt, ...)
 {
@@ -94,14 +94,11 @@ struct battery_info {
 	struct power_supply	ac;
 	struct power_supply	usb;
 	struct power_supply	bat;
-	struct power_supply	usb_bat;
 
 	struct workqueue_struct	*battery_workqueue;
 	struct delayed_work	star_monitor_work;
 
-	unsigned long		update_time;
 	unsigned long		last_cbc_time;
-	int			RIL_ready;
 	int			boot_TA_setting;
 	int			charge_setting_chcomp;
 
@@ -130,23 +127,18 @@ struct battery_info {
 	int				capacity;
 	int				health;
 
-	int				prev_charge_type;
-	int				prev_charge_status;
-	int				prev_present;
 	int				prev_voltage;
 	int				prev_temperature;
 	int				prev_capacity;
-	int				prev_health;
 
-#if defined (TRICKLE_RECHECK)
-	unsigned char			trickle_charge_check;
-#endif
 	int 			voltage_now;
 	int 			high_temp_overvoltage;
 
 };
 static struct battery_info *refer_batt_info = NULL;
 
+/*for battery update*/
+extern int g_is_suspend;
 /* Battery Mutex */
 static DEFINE_MUTEX(battery_mutex);
 
@@ -156,10 +148,8 @@ static unsigned int previous_gauge = 100;
 
 /* AT Cmd. Device */
 static int at_boot_state = 0;
-static unsigned char at_charge_on = 0;
 static unsigned char at_charge_comp = 0; 
 static unsigned char at_charge_index = 0;
-static unsigned char ELT_test_mode = 0;
 
 /* AT Cmd. */
 unsigned char ARRAY_TP_BOOT(void)
@@ -232,7 +222,6 @@ static void battery_update(struct battery_info *batt_info)
 	/* Backup Battery Info */	
 	batt_info->prev_voltage			= batt_info->voltage;
 	batt_info->prev_temperature		= batt_info->temperature;
-	batt_info->prev_present			= batt_info->present;
 
 	/* 
 	 * Read Battery Status : Voltage / Temp / Cap / Presence
@@ -252,36 +241,6 @@ static void battery_update(struct battery_info *batt_info)
 		batt_info->temperature = batt_info->temperature - 20;
 	}
 
-	/*
-	 * Look Over Current Charger and Restate of Charger type 
-	 */
-	muic_mode = get_muic_charger_type();
-	switch (muic_mode) {
-		case CHARGING_USB:
-			batt_info->charge_type = POWER_SUPPLY_TYPE_USB;
-			break;
-		case CHARGING_NA_TA:
-		case CHARGING_LG_TA:
-		case CHARGING_TA_1A:
-			batt_info->charge_type = POWER_SUPPLY_TYPE_MAINS;
-			break;
-		case CHARGING_FACTORY:
-			batt_info->charge_type = POWER_SUPPLY_TYPE_UPS;
-			break;
-		case CHARGING_NONE:
-#if defined (TRICKLE_RECHECK)
-			batt_info->trickle_charge_check = 0;
-#endif
-			batt_info->charge_type = POWER_SUPPLY_TYPE_BATTERY;
-			break;
-		default:
-#if defined (TRICKLE_RECHECK)
-			batt_info->trickle_charge_check = 0;
-#endif
-			batt_info->charge_type = POWER_SUPPLY_TYPE_BATTERY;
-			break;
-	}
-
 	/* AT Boot State */
 	if( (at_boot_state == 1) && (batt_info->present == 0) /*|| is_no_batt_or_dummy*/) 
 		batt_info->present = 1;
@@ -289,12 +248,9 @@ static void battery_update(struct battery_info *batt_info)
 	/* Battery Info. Calibration */
 	if((3200 < batt_info->voltage) && (batt_info->voltage < 4400)) {
 		if (batt_info->capacity_first_time) {
-			batt_info->prev_voltage = batt_info->voltage;
 			batt_info->capacity_first_time = 0;
 		} else {
-			if( 3400 >= batt_info->voltage )
-				batt_info->prev_voltage = batt_info->voltage;
-			else if( (3450 < batt_info->voltage) && (4050 > batt_info->voltage) )
+			if( (3450 < batt_info->voltage) && (4050 > batt_info->voltage) )
 				batt_info->voltage = (batt_info->prev_voltage*3 + batt_info->voltage)/4; 
 			else
 				batt_info->voltage = (batt_info->prev_voltage + batt_info->voltage)/2; 
@@ -304,17 +260,9 @@ static void battery_update(struct battery_info *batt_info)
 	{
 		if (3200 > batt_info->voltage) 
 		{
-			if ( 3400 >= batt_info->prev_voltage ) 
-			{
-				batt_info->prev_voltage = batt_info->voltage;
-			} 
-			else 
-			{
-				int tmp_volt = battery_read_voltage();
-				batt_info->voltage = tmp_volt;
-				batt_info->prev_voltage = tmp_volt;
-			} // End if( 3400 >= .... )
-		} // end if(3200 > ....)
+			if ( 3400 < batt_info->prev_voltage )
+				batt_info->voltage = battery_read_voltage();
+		}
 	}
 
 	// Capacity check through Voltage 
@@ -333,142 +281,58 @@ static void charger_contol_with_battery_temp(void)
 {
 	struct battery_info *batt_info = refer_batt_info;
 
-	if ( batt_info->present == 1 ) 
+	if (batt_info->present == 1 && charger_ic_get_status() != CHARGER_DISABLE)
 	{
-		batt_info->prev_health = batt_info->health;
-
-		switch ( batt_info->health ) 
+		if (batt_info->temperature >= 500)
 		{
-			case POWER_SUPPLY_HEALTH_GOOD:
-				if (batt_info->temperature >= 550) {
-					// Deactivate Charger : Battery Critical Overheat
-					batt_info->health = POWER_SUPPLY_HEALTH_CRITICAL_OVERHEAT;
-					if ( charger_ic_get_status() != CHARGER_DISABLE )
-					{
-						batt_info->charge_setting_chcomp = charger_ic_get_status();
-						charger_ic_disable_for_recharge();
-						charger_ic_set_state(CHARGER_STATE_SHUTDOWN);
-					}
-				}
-				else if ((batt_info->temperature >= 450) && (batt_info->temperature < 550)) {
-					// Change Charger Setting : Battery Overheat, USB_500 mode
-					batt_info->health = POWER_SUPPLY_HEALTH_OVERHEAT;
-					if ( charger_ic_get_status() != CHARGER_DISABLE ) {
-						if ( charger_ic_get_state() != CHARGER_STATE_FULLBATTERY ) 
-						{
-							batt_info->charge_setting_chcomp = charger_ic_get_status();
-							charger_ic_set_state(CHARGER_STATE_CHARGE);
-							charger_ic_set_mode(CHARGER_USB500);
-						}
-					}
-				} else if (batt_info->temperature <= (-100)) {
-					// Deactivate Charger : Battery Cold
-					batt_info->health = POWER_SUPPLY_HEALTH_COLD;
-					if ( charger_ic_get_status() != CHARGER_DISABLE )
-					{
-						batt_info->charge_setting_chcomp = charger_ic_get_status();
-						charger_ic_disable_for_recharge();
-						charger_ic_set_state(CHARGER_STATE_SHUTDOWN);
-					}
-				} else
-					batt_info->health = POWER_SUPPLY_HEALTH_GOOD;
-				break;
-
-			case POWER_SUPPLY_HEALTH_OVERHEAT:
-				if (batt_info->temperature >= 550) {
-					// Deactivate Charger : Battery Critical Overheat
-					batt_info->health = POWER_SUPPLY_HEALTH_CRITICAL_OVERHEAT;
-					if ( charger_ic_get_status() != CHARGER_DISABLE ) 
-					{
-						batt_info->charge_setting_chcomp = charger_ic_get_status();
-						charger_ic_disable_for_recharge();
-						charger_ic_set_state(CHARGER_STATE_SHUTDOWN);
-					}
-				}
-				else if(batt_info->temperature >= 420 && batt_info->temperature <= 550)
+			if (batt_info->health != POWER_SUPPLY_HEALTH_CRITICAL_OVERHEAT)
+			{
+				// Deactivate Charger : Battery Critical Overheat
+				batt_info->health = POWER_SUPPLY_HEALTH_CRITICAL_OVERHEAT;
+				batt_info->charge_setting_chcomp = charger_ic_get_status();
+				charger_ic_disable_for_recharge();
+				charger_ic_set_state(CHARGER_STATE_SHUTDOWN);
+			}
+		}
+		else if ((batt_info->temperature > 420) && (batt_info->temperature < 500))
+		{
+			if (batt_info->health != POWER_SUPPLY_HEALTH_OVERHEAT)
+			{
+				// Change Charger Setting : Battery Overheat, USB_500 mode
+				batt_info->health = POWER_SUPPLY_HEALTH_OVERHEAT;
+				if ( charger_ic_get_state() != CHARGER_STATE_FULLBATTERY )
 				{
-						batt_info->health = POWER_SUPPLY_HEALTH_OVERHEAT;
-					if ( charger_ic_get_status() != CHARGER_DISABLE ){
-						    if (charger_ic_get_state() != CHARGER_STATE_FULLBATTERY) 
-							{
-								if(batt_info->voltage >= 4000)
-								{
-								   	charger_ic_disable_for_recharge();
-									charger_ic_set_state(CHARGER_STATE_SHUTDOWN);
-									batt_info->high_temp_overvoltage=1;
-								}
-								else
-								{
-									charger_ic_set_state(CHARGER_STATE_CHARGE);
-									charger_ic_set_mode(CHARGER_USB500);
-									batt_info->high_temp_overvoltage=0;
-								}
-
-							}	
-						}
-				}				
-				
-				else if (batt_info->temperature <= 420) {
-					if ( charger_ic_get_status() != CHARGER_DISABLE ) {
-						// Reactivate Charger : Battery Normal again
-						batt_info->health = POWER_SUPPLY_HEALTH_GOOD;
-						if (charger_ic_get_state() != CHARGER_STATE_FULLBATTERY) 
-						{
-							charger_ic_set_state(CHARGER_STATE_CHARGE);
-							charger_ic_set_mode(batt_info->charge_setting_chcomp);
-						}
-					}
-					else
-						batt_info->health = POWER_SUPPLY_HEALTH_GOOD;
-				} else {
-					batt_info->health = POWER_SUPPLY_HEALTH_OVERHEAT;
+					charger_ic_set_state(CHARGER_STATE_CHARGE);
+					batt_info->charge_setting_chcomp = charger_ic_get_status();
+					charger_ic_set_mode(CHARGER_USB500);
 				}
-				break;
-
-			case POWER_SUPPLY_HEALTH_CRITICAL_OVERHEAT:
-				if (batt_info->temperature <= 520) {
-					if ( charger_ic_get_status() != CHARGER_DISABLE ) {
-						// Reactivate Charger : Battery USB mode again
-						batt_info->health = POWER_SUPPLY_HEALTH_OVERHEAT;
-						if (charger_ic_get_state() != CHARGER_STATE_FULLBATTERY) 
-						{
-							charger_ic_set_state(CHARGER_STATE_CHARGE);
-							charger_ic_set_mode(CHARGER_USB500);
-						}
-					}
-					else
-					batt_info->health = POWER_SUPPLY_HEALTH_OVERHEAT;
+			}
+		}
+		else if (batt_info->temperature <= 420)
+		{
+			if (batt_info->health != POWER_SUPPLY_HEALTH_GOOD)
+			{
+				// Reactivate Charger : Battery Normal again
+				batt_info->health = POWER_SUPPLY_HEALTH_GOOD;
+				if (charger_ic_get_state() != CHARGER_STATE_FULLBATTERY)
+				{
+					charger_ic_set_state(CHARGER_STATE_CHARGE);
+					charger_ic_set_mode(batt_info->charge_setting_chcomp);
 				}
-				else {
-					batt_info->health = POWER_SUPPLY_HEALTH_CRITICAL_OVERHEAT;
-				}
-				break;
-
-			case POWER_SUPPLY_HEALTH_COLD:
-				if (batt_info->temperature >= (-50)) {
-					if ( charger_ic_get_status() != CHARGER_DISABLE ) {
-						// Reactivate Charger : Battery Normal again
-						batt_info->health = POWER_SUPPLY_HEALTH_GOOD;
-						if ( charger_ic_get_state() != CHARGER_STATE_FULLBATTERY ) 
-						{
-							charger_ic_set_state(CHARGER_STATE_CHARGE);
-							charger_ic_set_mode(batt_info->charge_setting_chcomp);
-						}
-						
-					}
-					else
-						batt_info->health = POWER_SUPPLY_HEALTH_GOOD;
-				}
-				else {
-					batt_info->health = POWER_SUPPLY_HEALTH_COLD;
-				}
-				break;
-
-			default:
-				batt_info->health = POWER_SUPPLY_HEALTH_UNKNOWN;
-				break;
-		} // switch end
-	}// if end
+			}
+		}
+		else if (batt_info->temperature <= (-100))
+		{
+			if (batt_info->health != POWER_SUPPLY_HEALTH_COLD)
+			{
+				// Deactivate Charger : Battery Cold
+				batt_info->health = POWER_SUPPLY_HEALTH_COLD;
+				batt_info->charge_setting_chcomp = charger_ic_get_status();
+				charger_ic_disable_for_recharge();
+				charger_ic_set_state(CHARGER_STATE_SHUTDOWN);
+			}
+		}
+	}
 }// function end
 
 void determine_charger_state_with_charger_ic(void) 
@@ -592,9 +456,6 @@ void determine_charger_state_with_charger_ic(void)
 					{
 						if ( charger_ic_get_status() != CHARGER_DISABLE )
 						{
-					#if defined (TRICKLE_RECHECK)
-							batt_info->trickle_charge_check = 1;
-					#endif // TRICKLE_RECHECK
 							batt_info->charge_setting_chcomp = charger_ic_get_status();
 							//charger_ic_disable();
 							charger_ic_disable_for_recharge();
@@ -662,32 +523,6 @@ static void battery_data_polling_period_change(void)
 	batt_info->sleep_polling_interval = BAT_MIN(BAT_MIN(critical_period_wake, vol_period_wake), BAT_MIN(temp_period_wake, gauge_period_wake));
 }
 
-#if defined(TRICKLE_RECHECK)
-static void star_set_recharge_again(void)
-{
-	struct battery_info *batt_info = refer_batt_info;
-
-	charger_ic_set_state(CHARGER_STATE_RECHARGE);
-	switch (batt_info->health)
-	{
-		case POWER_SUPPLY_HEALTH_OVERHEAT:
-			charger_ic_set_mode(CHARGER_USB500);
-			break;
-
-		case POWER_SUPPLY_HEALTH_CRITICAL_OVERHEAT:
-			break;
-
-		case POWER_SUPPLY_HEALTH_COLD:
-			break;
-
-		case POWER_SUPPLY_HEALTH_GOOD:
-		default:
-			charger_ic_set_mode(batt_info->charge_setting_chcomp);
-			break;
-	}
-}
-#endif // TRICKLE_RECHECK
-
 static void battery_update_changes(struct battery_info *batt_info)
 {
 	battery_update(batt_info);
@@ -702,8 +537,8 @@ static void battery_update_changes(struct battery_info *batt_info)
 	star_capacity_from_voltage_via_calculate();
 
 	/* Recharging Algos */
-	if ( (( batt_info->CBC_value <= 97 ) || (batt_info->voltage < 4135)) 
-			&& (charger_ic_get_state() == CHARGER_STATE_FULLBATTERY)) 
+	if ( (( batt_info->CBC_value <= 97 ) || (batt_info->voltage < 4135))
+			&& (charger_ic_get_state() == CHARGER_STATE_FULLBATTERY))
 	{
 		charger_ic_set_state(CHARGER_STATE_RECHARGE);
 		switch ( batt_info->health ) {
@@ -721,53 +556,13 @@ static void battery_update_changes(struct battery_info *batt_info)
 		}
 	}
 
-	/* Trickle Recheck */
-#if defined(TRICKLE_RECHECK)
-	if ((batt_info->trickle_charge_check == 1) && (batt_info->voltage < 4000))
-		star_set_recharge_again();
-#endif // TRICKLE_RECHECK
-
 	/* Gauge Follower Function Called */
 	if( (batt_info->gauge_on == 1) && (batt_info->capacity != batt_info->capacity_gauge) )
 		star_gauge_follower_func();
 
 	/* Changes Polling Period */
 	battery_data_polling_period_change();
-
-	power_supply_changed(&batt_info->bat);
 }
-
-/* MODE For MUIC */
-void charger_ic_set_mode_for_muic(unsigned int mode)
-{
-	if(refer_batt_info == NULL)
-		return;
-
-	if ( (charger_ic_get_status() != CHARGER_FACTORY)||(mode != CHARGER_FACTORY) ) 
-	{
-		if( refer_batt_info->present == 1 ) {
-			charger_ic_set_mode(mode);
-			switch( charger_ic_get_status() ) {
-				case CHARGER_USB500:
-				case CHARGER_USB100:
-				case CHARGER_ISET:
-				case CHARGER_FACTORY:
-					power_supply_changed(&refer_batt_info->bat);
-					break;
-
-				default:
-					break;
-			} // End switch( charger... )
-		}
-	}
-
-	if (refer_batt_info->health != POWER_SUPPLY_HEALTH_GOOD)
-	{
-		refer_batt_info->health = POWER_SUPPLY_HEALTH_GOOD;
-		charger_contol_with_battery_temp();
-	}
-}
-EXPORT_SYMBOL(charger_ic_set_mode_for_muic);
 
 void charger_ic_disable_for_muic(void)
 {
@@ -775,25 +570,43 @@ void charger_ic_disable_for_muic(void)
 		return;
 
 	charger_ic_disable();
-#if defined(TRICKLE_RECHECK)
-	refer_batt_info->trickle_charge_check = 0;
-#endif
 	power_supply_changed(&refer_batt_info->bat);
 }
 EXPORT_SYMBOL(charger_ic_disable_for_muic);
 
-void notification_of_changes_to_battery(void)
+void notification_of_changes_to_battery(TYPE_CHARGING_MODE mode)
 {
 	if(refer_batt_info == NULL)
 		return;
 
+	struct battery_info *batt_info = refer_batt_info;
+
+	switch (mode)
+	{
+		case CHARGING_USB:
+			charger_ic_set_mode(CHARGER_USB500);
+			batt_info->charge_type = POWER_SUPPLY_TYPE_USB;
+			power_supply_changed(&batt_info->bat);
+			break;
+		case CHARGING_NA_TA:
+		case CHARGING_TA_1A:
+		case CHARGING_LG_TA:
+			charger_ic_set_mode(CHARGER_ISET);
+			batt_info->charge_type = POWER_SUPPLY_TYPE_MAINS;
+			power_supply_changed(&batt_info->bat);
+			break;
+		case CHARGING_NONE:
+		default:
+			batt_info->charge_type = POWER_SUPPLY_TYPE_BATTERY;
+			charger_ic_disable_for_muic();
+			break;
+	}
+
 	// Update Battery Information
 	cancel_delayed_work_sync(&refer_batt_info->star_monitor_work);
-	battery_update_changes(refer_batt_info);
+	// battery_update_changes(refer_batt_info);
 	queue_delayed_work(refer_batt_info->battery_workqueue, &refer_batt_info->star_monitor_work, 10 * HZ);
 }
-
-
 EXPORT_SYMBOL(notification_of_changes_to_battery);
 
 /* Battery Status Polling */
@@ -891,7 +704,7 @@ static int battery_get_property(struct power_supply *psy,
 			break;
 
 		case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-			val->intval = batt_info->voltage * 1000;
+			val->intval = batt_info->voltage; // * 1000;
 			break;
 
 		case POWER_SUPPLY_PROP_CAPACITY:
@@ -920,7 +733,7 @@ static int battery_get_property(struct power_supply *psy,
 	return 0;
 }
 
-static int power_battery_get_property(struct power_supply *psy,
+static int power_get_property(struct power_supply *psy,
 		enum power_supply_property psp,
 		union power_supply_propval *val)
 {
@@ -934,10 +747,8 @@ static int power_battery_get_property(struct power_supply *psy,
 				case CHARGING_LG_TA:
 				case CHARGING_NA_TA:
 				case CHARGING_TA_1A:
-					val->intval = POWER_SUPPLY_TYPE_MAINS;
-					break;
 				case CHARGING_USB:
-					val->intval = POWER_SUPPLY_TYPE_USB;
+					val->intval = 1;
 					break;
 				default:
 					val->intval = 0;
@@ -977,7 +788,7 @@ static ssize_t star_at_charge_store_property(
 	{
 		at_charge_index = 1;
 		battery_update_changes(batt_info);
-		charger_ic_set_mode_for_muic(CHARGER_ISET);
+		notification_of_changes_to_battery(CHARGER_ISET);
 	}
 	return count;
 }
@@ -1029,40 +840,6 @@ static ssize_t star_at_chcomp_store_property(
 		batt_info->capacity = 100;
 		at_charge_comp = 1;
 		power_supply_changed(&batt_info->bat);
-	}
-	return count;
-}
-
-static ssize_t star_debug_show_property(
-		struct device *dev,
-		struct device_attribute *attr,
-		char *buf)
-{
-	struct battery_info *batt_info = refer_batt_info;
-	size_t count = 0;
-
-	count = sprintf(buf, "%d\n", batt_info->polling_interval);
-	return count;
-}
-
-static ssize_t star_debug_store_property(
-		struct device *dev,
-		struct device_attribute *attr,
-		const char *buf,
-		size_t count)
-{
-	struct battery_info *batt_info = refer_batt_info;
-	static unsigned int value = 0;
-
-	value = (unsigned int)(simple_strtoul(buf, NULL, 0));
-
-	if ((value == 2171) && (ELT_test_mode == 0))		ELT_test_mode = 1;
-	else if ((value == 2170) && (ELT_test_mode == 1))	ELT_test_mode = 0;
-	else
-	{
-		batt_info->polling_interval = HZ*value;
-		cancel_delayed_work_sync(&batt_info->star_monitor_work);
-		queue_delayed_work(batt_info->battery_workqueue, &batt_info->star_monitor_work, HZ/60);
 	}
 	return count;
 }
@@ -1226,23 +1003,19 @@ static void star_gauge_follower_func(void)
 {
 	struct battery_info *batt_info = refer_batt_info;
 
+	batt_info->prev_capacity = batt_info->capacity;
 	if(charger_ic_get_status() != CHARGER_DISABLE)
 	{
 		if( batt_info->capacity_gauge > batt_info->capacity )		batt_info->capacity += 1;
 		else if( batt_info->capacity_gauge < batt_info->capacity )	batt_info->capacity -= 1;
-	} 
-	else	
+	}
+	else
 	{
-		if (batt_info->capacity - batt_info->prev_capacity > 5)
-			batt_info->capacity = batt_info->capacity_gauge;
-
 		if( batt_info->capacity_gauge < batt_info->capacity )		batt_info->capacity -= 1;
 	}
 
 	if (batt_info->capacity < 0)   batt_info->capacity = 0;
 	if (batt_info->capacity > 100) batt_info->capacity = 100;
-
-	batt_info->prev_capacity = batt_info->capacity;
 }
 static void valid_cbc_check_and_process(unsigned int value)  // not used  yet 
 {
@@ -1254,16 +1027,6 @@ static void valid_cbc_check_and_process(unsigned int value)  // not used  yet
 
 	if( bat_shutdown == 1 )
 		return;
-
-#if defined(TRICKLE_RECHECK)
-	if ((batt_info->trickle_charge_check == 1) && (value <=94))
-	{
-		if (batt_info->CBC_value >= value) // gauge_value reduce continuously... even if charger is in Recharge condition!!!
-		{
-			star_set_recharge_again();
-		}
-	}
-#endif // TRICKLE_RECHECK
 
 	batt_info->CBC_value = value;
 	battery_update(batt_info);
@@ -1294,6 +1057,8 @@ static void valid_cbc_check_and_process(unsigned int value)  // not used  yet
 			else
 			{
 				batt_info->capacity_gauge = display_cbc;
+				batt_info->capacity = display_cbc;
+				batt_info->gauge_on = 1;
 			}
 		}
 		else if( value == 100 )
@@ -1346,38 +1111,70 @@ static void valid_cbc_check_and_process(unsigned int value)  // not used  yet
 		}
 		else // ( 0 < cbc_value < 100 )
 		{
-			batt_info->capacity_gauge = display_cbc;
-
 			if( display_cbc >= batt_info->capacity )
 			{
-				if((display_cbc - batt_info->capacity) <= 1)
+				if((display_cbc - batt_info->capacity) <= 1) {
 					batt_info->capacity = display_cbc;
-				else if((display_cbc - batt_info->capacity) > 1)
-					star_gauge_follower_func();
+				} else if((display_cbc - batt_info->capacity) > 1) {
+					if(g_is_suspend) {
+						batt_info->capacity=display_cbc;
+						g_is_suspend=0;
+					} else {
+						star_gauge_follower_func();
+					}
+				}
 			}
 			else if( display_cbc < batt_info->capacity )
 			{
-				if ((batt_info->capacity - display_cbc) <= 1)
+				if ((batt_info->capacity - display_cbc) <= 1) {
 					batt_info->capacity = display_cbc;
-				else if ((batt_info->capacity - display_cbc) > 1)
-					star_gauge_follower_func();
+				} else if ((batt_info->capacity - display_cbc) > 1) {
+					if(g_is_suspend) {
+						batt_info->capacity=display_cbc;
+						g_is_suspend=0;
+					} else {
+						star_gauge_follower_func();
+					}
+				}
 			}
+
+			batt_info->capacity_gauge = display_cbc;
 
 			if (batt_info->capacity < 0)	batt_info->capacity = 0;
 			if (batt_info->capacity > 100)	batt_info->capacity = 100;
 		}
 
-		if( ((charger_ic_get_status() == CHARGER_DISABLE)
-				|| (charger_ic_get_state() == CHARGER_STATE_FULLBATTERY))
-				&& previous_gauge < batt_info->capacity )
-		{
-			batt_info->capacity = previous_gauge;
-		}
-
-		battery_update(batt_info);
+		// battery_update(batt_info);
 		power_supply_changed(&batt_info->bat);
 	}
 }
+
+static unsigned int fake_temp_control = 0;
+
+/* HW requirement: temp control  _S*/
+static ssize_t star_temp_control_show_property(
+		struct device *dev,
+		struct device_attribute *attr,
+		char *buf)
+{
+	return sprintf(buf, "%d\n", fake_temp_control);
+}
+
+static ssize_t star_temp_control_store_property(
+		struct device *dev,
+		struct device_attribute *attr,
+		const char *buf,
+		size_t count)
+{
+		struct battery_info *batt_info = refer_batt_info;
+
+		fake_temp_control = (unsigned int)(simple_strtoul(buf, NULL, 0));
+		batt_info->health = POWER_SUPPLY_HEALTH_GOOD;
+		battery_update_changes(batt_info);
+
+		return count;
+}
+/* HW requirement: temp control  _E*/
 
 static ssize_t star_battery_show_property(
 		struct device *dev,
@@ -1400,19 +1197,16 @@ static ssize_t star_battery_store_property(
 
 	/* Request CBC Cmd. */
 	if (value == 52407)
-	{
-		batt_info->RIL_ready = 1;
 		battery_data_polling_period_change();
-	}
 
-	if((batt_info->present == 1) && (value >= 0 && value <= 100) )
+	if(value >= 0 && value <= 100)
 	{
 		if(max8907c_rtc_alarm_count_read(&last_cbc))
 			batt_info->last_cbc_time = last_cbc; 
 
 		valid_cbc_check_and_process(value);
 	}
-	else if( (value < 0 || value > 100) && (value != 52407) )
+	else if((value < 0 || value > 100) && (value != 52407))
 	{
 		batt_info->capacity = 101; 
 		return count;
@@ -1446,9 +1240,9 @@ static ssize_t star_battery_voltage_now_store_property(
 /* Sysfs Cmd. Declaration */
 DEVICE_ATTR(at_charge, S_IRUGO | S_IWUGO, star_at_charge_show_property, star_at_charge_store_property);
 DEVICE_ATTR(at_chomp, S_IRUGO | S_IWUGO, star_at_chcomp_show_property, star_at_chcomp_store_property);
-DEVICE_ATTR(dbatt, S_IRUGO | S_IWUGO, star_debug_show_property, star_debug_store_property);
 DEVICE_ATTR(true_gauge, S_IRUGO | S_IWUGO, star_cbc_show_property, star_cbc_store_property);
 DEVICE_ATTR(bat_gauge, S_IRUGO | S_IWUGO, star_battery_show_property, star_battery_store_property);	// hardware/ril/lge-ril/lge-ril.c
+DEVICE_ATTR(temp_control, S_IRUGO | S_IWUGO, star_temp_control_show_property, star_temp_control_store_property);/* HW requirement: temp control  */
 DEVICE_ATTR(voltage_now, S_IRUGO | S_IWUGO, star_battery_voltage_now_show_property, star_battery_voltage_now_store_property);
 
 static char *ac_usb_supplied_to[] = {
@@ -1462,10 +1256,13 @@ static void star_initial_charger_state(void)
 	unsigned int value_status;
 	unsigned int value_pgb;
 	unsigned char state;
+	TYPE_CHARGING_MODE muic_mode;
 
 	value_status = read_gpio_status();
 	value_pgb = read_gpio_pgb();
 	state = CHGSB_PGB_ON_OFF;
+
+	muic_mode = get_muic_charger_type();
 
 	/* Read GPIO State */
 	if (( value_status == 1 )&& ( value_pgb == 1 ))
@@ -1487,16 +1284,28 @@ static void star_initial_charger_state(void)
 
 		case CHGSB_PGB_ON_ON:
 			charger_ic_set_state(CHARGER_STATE_CHARGE);
-			batt_info->charge_type = POWER_SUPPLY_TYPE_MAINS;
+			if (muic_mode == CHARGING_USB)
+				batt_info->charge_type = POWER_SUPPLY_TYPE_USB;
+			else if (muic_mode == CHARGING_LG_TA || muic_mode == CHARGING_NA_TA ||
+					muic_mode == CHARGING_TA_1A)
+				batt_info->charge_type = POWER_SUPPLY_TYPE_MAINS;
 			break;
 
 		case CHGSB_PGB_OFF_ON:
 			if ( at_boot_state == 0 ) {
 				charger_ic_set_state(CHARGER_STATE_CHARGE);
-				batt_info->charge_type = POWER_SUPPLY_TYPE_MAINS;
+				if (muic_mode == CHARGING_USB)
+					batt_info->charge_type = POWER_SUPPLY_TYPE_USB;
+				else if (muic_mode == CHARGING_LG_TA || muic_mode == CHARGING_NA_TA ||
+						muic_mode == CHARGING_TA_1A)
+					batt_info->charge_type = POWER_SUPPLY_TYPE_MAINS;
 			} else if ( at_boot_state == 1 ) {
 				charger_ic_set_state(CHARGER_STATE_STANDBY);
-				batt_info->charge_type = POWER_SUPPLY_TYPE_MAINS;
+				if (muic_mode == CHARGING_USB)
+					batt_info->charge_type = POWER_SUPPLY_TYPE_USB;
+				else if (muic_mode == CHARGING_LG_TA || muic_mode == CHARGING_NA_TA ||
+						muic_mode == CHARGING_TA_1A)
+					batt_info->charge_type = POWER_SUPPLY_TYPE_MAINS;
 			}
 			break;
 
@@ -1535,9 +1344,6 @@ static int __init battery_probe(struct platform_device *pdev)
 	batt_info->capacity_gauge = 111;
 	batt_info->health = POWER_SUPPLY_HEALTH_GOOD;
 	batt_info->id_polling_interval = 2 * HZ;
-#if	defined (TRICKLE_RECHECK)
-	batt_info->trickle_charge_check = 0;
-#endif
 	batt_info->polling_interval = BATTERY_POLLING_INTERVAL * HZ;
 	batt_info->sleep_polling_interval = SLEEP_BATTERY_CHECK_PERIOD;
 
@@ -1547,7 +1353,6 @@ static int __init battery_probe(struct platform_device *pdev)
 	batt_info->old_checkbat_sec = 0;
 
 	/* Added Variable Initialization : In GB */
-	batt_info->RIL_ready = 0;
 	batt_info->boot_TA_setting = 0;
 	batt_info->voltage = 3700;
 	batt_info->temperature = 270;
@@ -1555,7 +1360,7 @@ static int __init battery_probe(struct platform_device *pdev)
 	batt_info->prev_temperature = batt_info->temperature;
 
 	/* Create Battery Workqueue */
-	batt_info->battery_workqueue = create_singlethread_workqueue("SU660_Battery_Workqueue");
+	batt_info->battery_workqueue = create_singlethread_workqueue("Kowalski_Battery_Workqueue");
 	if( batt_info->battery_workqueue == NULL ) {
 		ret = -ENOMEM;
 		goto create_work_queue_fail;
@@ -1574,7 +1379,7 @@ static int __init battery_probe(struct platform_device *pdev)
 	batt_info->usb.num_supplicants = ARRAY_SIZE(ac_usb_supplied_to);
 	batt_info->usb.properties = ac_usb_battery_props;
 	batt_info->usb.num_properties = ARRAY_SIZE(ac_usb_battery_props);
-	batt_info->usb.get_property = power_battery_get_property;
+	batt_info->usb.get_property = power_get_property;
 
 	batt_info->ac.name = "ac";
 	batt_info->ac.type = POWER_SUPPLY_TYPE_MAINS;
@@ -1582,7 +1387,7 @@ static int __init battery_probe(struct platform_device *pdev)
 	batt_info->ac.num_supplicants = ARRAY_SIZE(ac_usb_supplied_to);
 	batt_info->ac.properties = ac_usb_battery_props;
 	batt_info->ac.num_properties = ARRAY_SIZE(ac_usb_battery_props);
-	batt_info->ac.get_property = power_battery_get_property;
+	batt_info->ac.get_property = power_get_property;
 
 	platform_set_drvdata(pdev, batt_info);
 
@@ -1614,12 +1419,6 @@ static int __init battery_probe(struct platform_device *pdev)
 		goto at_chomp_file_create_fail;
 	}
 
-	/* Battery Debug Cmd. */
-	ret = device_create_file(&pdev->dev, &dev_attr_dbatt);
-	if (ret) {
-		goto dbatt_file_create_fail;
-	}
-
 	/* Fuel Gauge Cmd. */
 	ret = device_create_file(&pdev->dev, &dev_attr_true_gauge);
 	if (ret) {
@@ -1631,6 +1430,13 @@ static int __init battery_probe(struct platform_device *pdev)
 	if (ret)
 	{
 		goto bat_gauge_file_create_fail;
+	}
+
+	/* Battery Temp control Info. */
+	ret = device_create_file(&pdev->dev, &dev_attr_temp_control);
+	if (ret)
+	{
+		goto temp_control_file_create_fail;
 	}
 
 	ret = device_create_file(&pdev->dev, &dev_attr_voltage_now);
@@ -1658,22 +1464,31 @@ read_file_create_fail:
 voltage_now_file_create_fail:
 	device_remove_file(&pdev->dev, &dev_attr_voltage_now);
 
+temp_control_file_create_fail:
+	device_remove_file(&pdev->dev, &dev_attr_temp_control);
+
 bat_gauge_file_create_fail:
-	device_remove_file(&pdev->dev, &dev_attr_true_gauge);
+	device_remove_file(&pdev->dev, &dev_attr_bat_gauge);
+
 true_gauge_file_create_fail:
-	device_remove_file(&pdev->dev, &dev_attr_dbatt);
-dbatt_file_create_fail:
-	device_remove_file(&pdev->dev, &dev_attr_at_chomp);
+	device_remove_file(&pdev->dev, &dev_attr_true_gauge);
+
 at_chomp_file_create_fail:
-	device_remove_file(&pdev->dev, &dev_attr_at_charge);
+	device_remove_file(&pdev->dev, &dev_attr_at_chomp);
+
 at_charge_file_create_fail:
-	power_supply_unregister(&batt_info->usb);
-ac_online_failed:
-	power_supply_unregister(&batt_info->bat);
+	device_remove_file(&pdev->dev, &dev_attr_at_charge);
+
 usb_online_failed:
+	power_supply_unregister(&batt_info->usb);
+
+ac_online_failed:
 	power_supply_unregister(&batt_info->ac);
+
 batt_failed:
+	power_supply_unregister(&batt_info->bat);
 	kfree(batt_info);
+
 create_work_queue_fail:
 	destroy_workqueue(batt_info->battery_workqueue);
 	return ret;
@@ -1705,9 +1520,9 @@ static int __exit battery_remove(struct platform_device *pdev)
 	/* Remove Device Files */
 	device_remove_file(&pdev->dev, &dev_attr_at_charge);
 	device_remove_file(&pdev->dev, &dev_attr_at_chomp);
-	device_remove_file(&pdev->dev, &dev_attr_dbatt);
 	device_remove_file(&pdev->dev, &dev_attr_true_gauge);
 	device_remove_file(&pdev->dev, &dev_attr_bat_gauge);
+	device_remove_file(&pdev->dev, &dev_attr_temp_control);
 	device_remove_file(&pdev->dev, &dev_attr_voltage_now);
 	device_remove_file(&pdev->dev, &dev_attr_readtempadc);
 
@@ -1805,9 +1620,9 @@ static void battery_shutdown(struct platform_device *pdev)
 	/* Remove Device Files */
 	device_remove_file(&pdev->dev, &dev_attr_at_charge);
 	device_remove_file(&pdev->dev, &dev_attr_at_chomp);
-	device_remove_file(&pdev->dev, &dev_attr_dbatt);
 	device_remove_file(&pdev->dev, &dev_attr_true_gauge); 
 	device_remove_file(&pdev->dev, &dev_attr_bat_gauge);
+	device_remove_file(&pdev->dev, &dev_attr_temp_control);
 	device_remove_file(&pdev->dev, &dev_attr_voltage_now);
 	device_remove_file(&pdev->dev, &dev_attr_readtempadc);
 
@@ -1857,7 +1672,7 @@ static void __exit battery_exit(void)
 module_init(battery_init);
 module_exit(battery_exit);
 
-MODULE_AUTHOR("sagnhyun.hong@lge.com");
-MODULE_DESCRIPTION("Battery Driver");
+MODULE_AUTHOR("ivan@cerrato.biz");
+MODULE_DESCRIPTION("Kowalski Battery Driver");
 MODULE_LICENSE("GPL");
 

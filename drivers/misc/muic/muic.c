@@ -60,7 +60,7 @@
 #endif
 
 #ifdef	CONFIG_BATTERY_CHARGER
-#include <linux/su660_battery.h> 
+#include <linux/kowalski_battery.h>
 #endif
 
 #ifdef  CONFIG_BSSQ_BATTERY
@@ -583,34 +583,12 @@ static ssize_t muic_proc_write(struct file *filp, const char *buf, size_t len, l
 #endif				
 			case 'n':
 				printk("TA <==> DEVICE charger connection [%d] [%d]\n",g_half_charging_control,charging_mode);
-					switch (g_half_charging_control) {
-							case CHARGING_USB:
-								charger_ic_set_mode_for_muic(CHARGER_USB500); 
-								break;
-
-							case CHARGING_NA_TA:
-							case CHARGING_LG_TA:
-							case CHARGING_TA_1A:
-								charger_ic_set_mode_for_muic(CHARGER_ISET);
-								break;
-
-							case CHARGING_FACTORY:
-								//	charger_ic_set_mode(CHARGER_FACTORY);
-								break;
-
-							case CHARGING_NONE:
-								charger_ic_disable_for_muic();
-								break;
-
-							default:
-								charger_ic_disable_for_muic();
-								break;
-						}				
+				muic_send_charger_type(g_half_charging_control);
 				break;		
 			case 'd':
 				printk("TA =\\=  DEVICE charger disconnection %d\n",charging_mode);
 				g_half_charging_control=charging_mode;
-				charger_ic_disable_for_muic();
+				muic_send_charger_type(charging_mode);
 				break;	
 
 			case 'k':
@@ -765,86 +743,19 @@ EXPORT_SYMBOL(get_muic_charger_type);
 
 void muic_send_charger_type(TYPE_CHARGING_MODE mode)
 {
-#ifdef CONFIG_BATTERY_CHARGER
-	switch (mode) {
-		case CHARGING_USB:
-			charger_ic_set_mode_for_muic(CHARGER_USB500); 
-			break;
-
-		case CHARGING_NA_TA:
-		case CHARGING_LG_TA:
-		case CHARGING_TA_1A:
-			charger_ic_set_mode_for_muic(CHARGER_ISET);
-			break;
-
-		case CHARGING_FACTORY:
-			//	charger_ic_set_mode(CHARGER_FACTORY);
-			break;
-
-		case CHARGING_NONE:
-			charger_ic_disable_for_muic();
-			break;
-
-		default:
-			charger_ic_disable_for_muic();
-			break;
-	}
-#elif CONFIG_MACH_BSSQ
-	switch (mode) {
-		case CHARGING_USB:	
-			charger_ic_set_mode(CHARGER_USB500); 
-			break;
-
-		case CHARGING_NA_TA:
-		case CHARGING_LG_TA:
-		case CHARGING_TA_1A:
-			charger_ic_set_mode(CHARGER_ISET);
-			break;
-
-		case CHARGING_FACTORY:
-			//charger_ic_set_mode(CHARGER_IC_GSM_TEST);
-			break;
-
-		case CHARGING_NONE:
-			charger_ic_disable();
-			break;
-
-		default:
-			charger_ic_disable();
-			break;
-	}
-
-#endif  
 	// Notify To Battery 
-	notification_of_changes_to_battery();
+	notification_of_changes_to_battery(mode);
 }
-
-
 
 // LGE_CHANGE_E[jongho3.lee] get muic detecting for charger.
 void set_muic_charger_detected(void)
 {
-#if 0 // this is for wait event which is not unsing just now. block it temporary..
-	//extern wait_queue_head_t muic_event;
-
-	DBG("[MUIC] LGE: set_muic_charger_detected\n");
-
-	//atomic_set(&muic_charger_detected,1);
-	//wake_up_interruptible(&muic_event);
-	muic_chager_event = 1;
-	//wake_up(&muic_event);
-#endif
-	//charger_fsm(CHARG_FSM_CAUSE_ANY);	//[gieseo.park@lge.com] - Cosmo code
-
-	muic_send_charger_type(charging_mode);	//[gieseo.park@lge.com] - X3 code
+	muic_send_charger_type(charging_mode);
 #if defined (MUIC_SLEEP)
 	muic_wakeup_lock();
 #endif//
 }
 EXPORT_SYMBOL(set_muic_charger_detected);
-
-
-
 
 /*
  * Function: Read the MUIC register whose internal address is addr
