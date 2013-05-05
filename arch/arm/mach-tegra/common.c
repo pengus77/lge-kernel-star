@@ -87,7 +87,11 @@ unsigned long tegra_fb_size;
 unsigned long tegra_fb2_start;
 unsigned long tegra_fb2_size;
 unsigned long tegra_carveout_start;
+#ifdef CONFIG_CM_BOOTLOADER_COMPAT
+unsigned long tegra_carveout_size = SZ_128M;
+#else
 unsigned long tegra_carveout_size = 0x07800000; // 120MB
+#endif
 unsigned long tegra_vpr_start;
 unsigned long tegra_vpr_size;
 unsigned long tegra_lp0_vec_start;
