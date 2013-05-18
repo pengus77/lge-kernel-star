@@ -733,7 +733,7 @@ static int battery_get_property(struct power_supply *psy,
 	return 0;
 }
 
-static int power_get_property(struct power_supply *psy,
+static int power_get_property_ac(struct power_supply *psy,
 		enum power_supply_property psp,
 		union power_supply_propval *val)
 {
@@ -747,6 +747,31 @@ static int power_get_property(struct power_supply *psy,
 				case CHARGING_LG_TA:
 				case CHARGING_NA_TA:
 				case CHARGING_TA_1A:
+					val->intval = 1;
+					break;
+				default:
+					val->intval = 0;
+					break;
+			}
+			break;
+		default:
+			val->intval = 0;
+			return -EINVAL;
+	}
+	return 0;
+}
+
+static int power_get_property_usb(struct power_supply *psy,
+		enum power_supply_property psp,
+		union power_supply_propval *val)
+{
+	TYPE_CHARGING_MODE muic_charging_mode;
+	muic_charging_mode = get_muic_charger_type();
+
+	switch (psp) {
+		case POWER_SUPPLY_PROP_ONLINE:
+			switch (muic_charging_mode)
+			{
 				case CHARGING_USB:
 					val->intval = 1;
 					break;
@@ -1379,7 +1404,7 @@ static int __init battery_probe(struct platform_device *pdev)
 	batt_info->usb.num_supplicants = ARRAY_SIZE(ac_usb_supplied_to);
 	batt_info->usb.properties = ac_usb_battery_props;
 	batt_info->usb.num_properties = ARRAY_SIZE(ac_usb_battery_props);
-	batt_info->usb.get_property = power_get_property;
+	batt_info->usb.get_property = power_get_property_usb;
 
 	batt_info->ac.name = "ac";
 	batt_info->ac.type = POWER_SUPPLY_TYPE_MAINS;
@@ -1387,7 +1412,7 @@ static int __init battery_probe(struct platform_device *pdev)
 	batt_info->ac.num_supplicants = ARRAY_SIZE(ac_usb_supplied_to);
 	batt_info->ac.properties = ac_usb_battery_props;
 	batt_info->ac.num_properties = ARRAY_SIZE(ac_usb_battery_props);
-	batt_info->ac.get_property = power_get_property;
+	batt_info->ac.get_property = power_get_property_ac;
 
 	platform_set_drvdata(pdev, batt_info);
 
