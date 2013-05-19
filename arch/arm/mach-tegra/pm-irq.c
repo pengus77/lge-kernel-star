@@ -218,39 +218,6 @@ int tegra_pm_irq_set_wake_type(int irq, int flow_type)
 	return 0;
 }
 
-/* translate lp0 wake sources back into irqs to catch edge triggered wakeups */
-static void tegra_pm_irq_syscore_resume_helper(
-	unsigned long wake_status,
-	unsigned int index)
-{
-	int wake;
-	int irq;
-	struct irq_desc *desc;
-
-	for_each_set_bit(wake, &wake_status, sizeof(wake_status) * 8) {
-		irq = tegra_wake_to_irq(wake + 32 * index);
-		if (!irq) {
-			pr_info("Resume caused by WAKE%d\n",
-				(wake + 32 * index));
-			continue;
-		}
-
-		desc = irq_to_desc(irq);
-		if (!desc || !desc->action || !desc->action->name) {
-			pr_info("Resume caused by WAKE%d, irq %d\n",
-				(wake + 32 * index), irq);
-			continue;
-		}
-
-		pr_info("Resume caused by WAKE%d, %s\n", (wake + 32 * index),
-			desc->action->name);
-
-		tegra_wake_irq_count[wake + 32 * index]++;
-
-		generic_handle_irq(irq);
-	}
-}
-
 static u32 saved_wake_status_lo;
 static u32 saved_wake_status_hi;
 
@@ -266,18 +233,6 @@ static void tegra_pm_irq_syscore_resume(void)
 #else
 	saved_wake_status_hi = 0;
 #endif
-}
-
-static void tegra_pm_irq_resume_on_complete(struct device *dev)
-{
-	local_irq_disable();
-	tegra_pm_irq_syscore_resume_helper(
-		(unsigned long)saved_wake_status_lo, 0);
-#ifndef CONFIG_ARCH_TEGRA_2x_SOC
-	tegra_pm_irq_syscore_resume_helper(
-		(unsigned long)saved_wake_status_hi, 1);
-#endif
-	local_irq_enable();
 }
 
 /* set up lp0 wake sources */
@@ -396,6 +351,53 @@ static int __init tegra_pm_irq_debug_init(void)
 }
 
 late_initcall(tegra_pm_irq_debug_init);
+#endif
+
+#ifdef CONFIG_PM
+/* translate lp0 wake sources back into irqs to catch edge triggered wakeups */
+static void tegra_pm_irq_syscore_resume_helper(
+	unsigned long wake_status,
+	unsigned int index)
+{
+	int wake;
+	int irq;
+	struct irq_desc *desc;
+
+	for_each_set_bit(wake, &wake_status, sizeof(wake_status) * 8) {
+		irq = tegra_wake_to_irq(wake + 32 * index);
+		if (!irq) {
+			pr_info("Resume caused by WAKE%d\n",
+				(wake + 32 * index));
+			continue;
+		}
+
+		desc = irq_to_desc(irq);
+		if (!desc || !desc->action || !desc->action->name) {
+			pr_info("Resume caused by WAKE%d, irq %d\n",
+				(wake + 32 * index), irq);
+			continue;
+		}
+
+		pr_info("Resume caused by WAKE%d, %s\n", (wake + 32 * index),
+			desc->action->name);
+
+		tegra_wake_irq_count[wake + 32 * index]++;
+
+		generic_handle_irq(irq);
+	}
+}
+
+static void tegra_pm_irq_resume_on_complete(struct device *dev)
+{
+	local_irq_disable();
+	tegra_pm_irq_syscore_resume_helper(
+		(unsigned long)saved_wake_status_lo, 0);
+#ifndef CONFIG_ARCH_TEGRA_2x_SOC
+	tegra_pm_irq_syscore_resume_helper(
+		(unsigned long)saved_wake_status_hi, 1);
+#endif
+	local_irq_enable();
+}
 
 static const struct dev_pm_ops irq_pm_ops = {
 	.complete = tegra_pm_irq_resume_on_complete,
@@ -403,10 +405,8 @@ static const struct dev_pm_ops irq_pm_ops = {
 
 static struct platform_driver pm_irq_resume_complete_driver = {
 	.driver = {
-		.name = "pm_irq_pm_ops",
-#ifdef CONFIG_PM
+		.name = "pm_irq_pm_ops_tegra",
 		.pm   = &irq_pm_ops,
-#endif
 	},
 };
 
@@ -423,5 +423,4 @@ static void __exit pm_irq_resume_complete_exit(void)
 
 module_init(pm_irq_resume_complete_init)
 module_exit(pm_irq_resume_complete_exit)
-
 #endif
