@@ -770,33 +770,29 @@ static unsigned int aat2870_bl_conv_to_lux(int lev)
 
 static int aat2870_bl_send_cmd(struct aat2870_bl_driver_data *drv, struct aat2870_ctl_tbl_t *tbl)
 {
-        unsigned long delay = 0;
+	unsigned long delay = 0;
 
-        if (is_suspended)
-        	return 0;
+	if (is_suspended)
+		return 0;
 
-        if (tbl == NULL) {
-                dbg("input ptr is null\n");
-                return -EIO;
-        }
+	if (tbl == NULL) {
+		dbg("input ptr is null\n");
+		return -EIO;
+	}
 
-        mutex_lock(&drv->cmd_lock);
-        for( ;;) {
-                if (tbl->reg == 0xFF) {
-                        if (tbl->val != 0xFE) {
-                                delay = (unsigned long)tbl->val;
-                        }
-                        else
-                                break;
-                }
-                else {
-                        if (aat2870_bl_write(drv->bd, tbl->reg, tbl->val) != 0)
-                                dbg("i2c failed addr:%d, value:%d\n", tbl->reg, tbl->val);
-                }
-                tbl++;
-        }
-        mutex_unlock(&drv->cmd_lock);
-        return 0;
+	mutex_lock(&drv->cmd_lock);
+	for( ;;) {
+		if (tbl->reg == 0xFF && tbl->val == 0xFE) {
+			break;
+		}
+		else {
+			if (aat2870_bl_write(drv->bd, tbl->reg, tbl->val) != 0)
+				dbg("i2c failed addr:%d, value:%d\n", tbl->reg, tbl->val);
+		}
+		tbl++;
+	}
+	mutex_unlock(&drv->cmd_lock);
+	return 0;
 }
 
 static void aat2870_bl_switch_mode(int op_mode)
@@ -1215,11 +1211,10 @@ static ssize_t aat2870_bl_store_alc_table(struct device *dev, struct device_attr
 		}
 	}
 
-	if (i == 15) {
-		if (drv->op_mode == AAT2870_OP_MODE_ALC)
-			aat2870_bl_send_cmd(drv, tbl);
-	} else {
-		drv->cmds.alc = aat2870bl_pengus_tbl;
+	drv->cmds.alc = tbl;
+	if (drv->op_mode == AAT2870_OP_MODE_ALC) {
+		printk("%s: sent new table to the backlight driver !\n", __FUNCTION__);
+		aat2870_bl_send_cmd(drv, tbl);
 	}
 
 	return count;
