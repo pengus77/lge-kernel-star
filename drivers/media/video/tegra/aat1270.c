@@ -27,9 +27,12 @@
 #include <mach/gpio.h>
 #include <media/aat1270.h>
 #include <linux/err.h>
+#include <linux/wakelock.h>
 
 static struct aat1270_platform_data*   pdata   =       0;
 static unsigned char    flash_brightness        =       7;
+
+static struct wake_lock torch_wake_lock;
 
 static ssize_t flash_store(struct device* dev,
 				struct device_attribute* attr, const char* buf, size_t count)
@@ -72,7 +75,12 @@ static ssize_t torch_store(struct device* dev,
 	gpio_set_value(pdata->gpio_enset, 0);
 	if(brightness > 0) {
 		gpio_set_value(pdata->gpio_enset, 1);
-	}	
+		if (!wake_lock_active(&torch_wake_lock))
+			wake_lock(&torch_wake_lock);
+	} else {
+		if (wake_lock_active(&torch_wake_lock))
+			wake_unlock(&torch_wake_lock);
+	}
 
 	return  count;
 }
@@ -107,6 +115,8 @@ static void aat1270_remove(struct platform_device *pdev)
 	device_remove_file(&pdev->dev, &dev_attr_flash);
 	device_remove_file(&pdev->dev, &dev_attr_flash_brightness);
 	device_remove_file(&pdev->dev, &dev_attr_torch);
+
+	wake_lock_destroy(&torch_wake_lock);
 }
 
 static void aat1270_shutdown(struct platform_device *pdev)
@@ -178,6 +188,8 @@ static int aat1270_probe(struct platform_device *pdev)
                 printk("[aat1270] device create file enable fail!\n");
                 goto exit;
         }
+
+        wake_lock_init(&torch_wake_lock, WAKE_LOCK_SUSPEND, "aat1270_torch");
 
 	return 0;
 	
