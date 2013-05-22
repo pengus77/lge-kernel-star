@@ -110,12 +110,17 @@ static struct aat2870_ctl_tbl_t aat2870bl_pengus_tbl[] = {
 	{ 0x1F, 0x27 },  /* 1400 lux */
 	{ 0x20, 0x2B },  /* 2000 lux */
 	{ 0x21, 0x3C },  /* 3000 lux */
-    { 0x0E, 0x73 },  /* SNSR_LIN_LOG=linear, ALSOUT_LIN_LOG=log, RSET=16k~64k,
-    									   * GAIN=low, GM=man gain, ALS_EN=on */
-    { 0x0F, 0x01 },  /* SBIAS=3.0V, SBIAS=on */
-    { 0x10, 0x90 },  /* pwm inactive, auto polling, 1sec, +0% */
-    { 0x00, 0xFF },  /* Channel Enable : ALL */
-    { 0xFF, 0xFE }   /* end or command */
+	{ 0x0E, 0x31 },  // SNSR_LIN_LOG=linear, ALSOUT_LIN_LOG=linear, RSET=16k~64k,
+						 // GAIN=low, GM=auto, ALS_EN=on
+	//{ 0x0E, 0xF1 },  // SNSR_LIN_LOG=log, ALSOUT_LIN_LOG=log, RSET=16k~64k,
+					 // GAIN=low, GM=auto, ALS_EN=on
+    //{ 0x0E, 0x73 },// SNSR_LIN_LOG=linear, ALSOUT_LIN_LOG=log, RSET=16k~64k,
+     	 	 	 	 // GAIN=low, GM=man gain, ALS_EN=on
+    { 0x0F, 0x01 },  // SBIAS=3.0V, SBIAS=on
+    { 0x10, 0xB0 },  // pwm inactive, auto polling, 2sec, +0%
+    //{ 0x10, 0x90 },// pwm inactive, auto polling, 1sec, +0%
+    { 0x00, 0xFF },  // Channel Enable : ALL
+    { 0xFF, 0xFE }   // end or command
 };
 
 static struct aat2870_ctl_tbl_t aat2870bl_fade_in_tbl[] = {
@@ -1201,8 +1206,8 @@ static ssize_t aat2870_bl_store_alc_table(struct device *dev, struct device_attr
 		if (strlen(k) > 0) {
 			val = simple_strtoul(k, NULL, 10);
 
-			if (val < 5)
-				val = 5;
+			if (val < 3)
+				val = 3;
 			if (val > 70)
 				val = 70;
 
