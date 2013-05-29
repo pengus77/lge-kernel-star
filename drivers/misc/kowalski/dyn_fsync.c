@@ -22,8 +22,11 @@
 #include <linux/mutex.h>
 #include <linux/reboot.h>
 #include <linux/writeback.h>
+#include <linux/workqueue.h>
 
 #define DYN_FSYNC_VERSION 2
+
+struct delayed_work fsync_suspend_work;
 
 /*
  * fsync_mutex protects dyn_fsync_active during early suspend / lat resume transitions
@@ -108,9 +111,14 @@ static struct attribute_group dyn_fsync_active_attr_group =
 
 static struct kobject *dyn_fsync_kobj;
 
-static void dyn_fsync_suspend(struct early_suspend *h)
+static void fsync_suspend_work_fn(struct work_struct *work)
 {
 	dyn_fsync_flush();
+}
+
+static void dyn_fsync_suspend(struct early_suspend *h)
+{
+	schedule_delayed_work_on(0, &fsync_suspend_work, 3*HZ);
 }
 
 static void dyn_fsync_resume(struct early_suspend *h)
@@ -123,7 +131,6 @@ static void dyn_fsync_resume(struct early_suspend *h)
 }
 
 static struct early_suspend dyn_fsync_early_suspend_handler = {
-	.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN,
 	.suspend = dyn_fsync_suspend,
 	.resume = dyn_fsync_resume,
 };
@@ -158,6 +165,9 @@ static int dyn_fsync_init(void)
 		pr_info("%s dyn_fsync sysfs create failed!\n", __FUNCTION__);
 		kobject_put(dyn_fsync_kobj);
 	}
+
+	INIT_DELAYED_WORK_DEFERRABLE(&fsync_suspend_work, fsync_suspend_work_fn);
+
 	return sysfs_result;
 }
 
