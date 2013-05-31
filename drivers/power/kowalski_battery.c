@@ -622,6 +622,13 @@ static void battery_work(struct work_struct *work)
 #define to_battery_info(x) container_of((x), \
 		struct battery_info, bat);
 
+#ifdef CONFIG_KOWALSKI_DYNAMIC_FSYNC
+extern bool dyn_fsync_force_off;
+extern bool dyn_fsync_active;
+
+extern void dyn_fsync_flush(void);
+#endif
+
 static int battery_get_property(struct power_supply *psy,
 		enum power_supply_property psp,
 		union power_supply_propval *val)
@@ -708,10 +715,21 @@ static int battery_get_property(struct power_supply *psy,
 			break;
 
 		case POWER_SUPPLY_PROP_CAPACITY:
-			if (batt_info->gauge_on == 1)
+			if (batt_info->gauge_on == 1) {
 				val->intval = batt_info->capacity;
-			else
+#ifdef CONFIG_KOWALSKI_DYNAMIC_FSYNC
+				if (dyn_fsync_active && batt_info->capacity <= 5) {
+					dyn_fsync_flush();
+					dyn_fsync_active = false;
+					dyn_fsync_force_off = true;
+				} else if (dyn_fsync_force_off && batt_info->capacity > 5) {
+					dyn_fsync_force_off = false;
+				}
+#endif
+			}
+			else {
 				val->intval = 999;
+			}
 			break;
 
 		case POWER_SUPPLY_PROP_TEMP:

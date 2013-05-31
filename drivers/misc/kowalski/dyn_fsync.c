@@ -33,10 +33,11 @@ struct delayed_work fsync_suspend_work;
  */
 static DEFINE_MUTEX(fsync_mutex);
 
+bool dyn_fsync_force_off = false;
 bool dyn_fsync_early_suspend = false;
 bool dyn_fsync_active = false;
 
-static void dyn_fsync_flush(void)
+void dyn_fsync_flush(void)
 {
 	mutex_lock(&fsync_mutex);
 	if (dyn_fsync_active) {
@@ -49,6 +50,7 @@ static void dyn_fsync_flush(void)
 	}
 	mutex_unlock(&fsync_mutex);
 }
+EXPORT_SYMBOL(dyn_fsync_flush);
 
 static ssize_t dyn_fsync_active_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
@@ -59,6 +61,12 @@ static ssize_t dyn_fsync_active_store(struct kobject *kobj, struct kobj_attribut
 {
 	unsigned int data;
 
+	if (dyn_fsync_force_off) {
+		dyn_fsync_active = false;
+		pr_info("%s: dynamic fsync locked - command rejected\n", __FUNCTION__);
+		return count;
+	}
+
 	if(sscanf(buf, "%u\n", &data) == 1) {
 		if (data == 1) {
 			pr_info("%s: dynamic fsync enabled\n", __FUNCTION__);
@@ -66,8 +74,8 @@ static ssize_t dyn_fsync_active_store(struct kobject *kobj, struct kobj_attribut
 		}
 		else if (data == 0) {
 			pr_info("%s: dyanamic fsync disabled\n", __FUNCTION__);
-			dyn_fsync_active = false;
 			dyn_fsync_flush();
+			dyn_fsync_active = false;
 		}
 		else
 			pr_info("%s: bad value: %u\n", __FUNCTION__, data);
