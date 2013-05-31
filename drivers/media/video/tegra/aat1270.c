@@ -67,19 +67,22 @@ static ssize_t flash_brightness_show(struct device* dev,
 }
 static DEVICE_ATTR(flash_brightness, 0666, flash_brightness_show, flash_brightness_store);
 
+static bool torch_active = false;
+
 static ssize_t torch_store(struct device* dev,
 				 struct device_attribute* attr, const char* buf, size_t count)
 {
-	unsigned long brightness = simple_strtoul(buf, NULL, 10);
-	
-	gpio_set_value(pdata->gpio_enset, 0);
-	if(brightness > 0) {
+	unsigned long value = simple_strtoul(buf, NULL, 10);
+
+	if (value == 0 && torch_active) {
+		gpio_set_value(pdata->gpio_enset, 0);
+		wake_unlock(&torch_wake_lock);
+		torch_active = false;
+	}
+	else if (value > 0 && !torch_active) {
 		gpio_set_value(pdata->gpio_enset, 1);
-		if (!wake_lock_active(&torch_wake_lock))
-			wake_lock(&torch_wake_lock);
-	} else {
-		if (wake_lock_active(&torch_wake_lock))
-			wake_unlock(&torch_wake_lock);
+		wake_lock(&torch_wake_lock);
+		torch_active = true;
 	}
 
 	return  count;
