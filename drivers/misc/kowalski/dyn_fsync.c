@@ -36,6 +36,7 @@ static DEFINE_MUTEX(fsync_mutex);
 bool dyn_fsync_force_off = false;
 bool dyn_fsync_early_suspend = false;
 bool dyn_fsync_active = false;
+bool dyn_fsync_was_active = false;
 
 void dyn_fsync_flush(void)
 {
@@ -61,21 +62,28 @@ static ssize_t dyn_fsync_active_store(struct kobject *kobj, struct kobj_attribut
 {
 	unsigned int data;
 
-	if (dyn_fsync_force_off) {
-		dyn_fsync_active = false;
-		pr_info("%s: dynamic fsync locked - command rejected\n", __FUNCTION__);
-		return count;
-	}
+	if (dyn_fsync_force_off)
+		pr_info("%s: dynamic fsync locked - commands will be stored and replied ( when charge > 5%% )\n", __FUNCTION__);
 
 	if(sscanf(buf, "%u\n", &data) == 1) {
 		if (data == 1) {
-			pr_info("%s: dynamic fsync enabled\n", __FUNCTION__);
-			dyn_fsync_active = true;
+			if (dyn_fsync_force_off) {
+				pr_info("%s: dynamic fsync will be enabled\n", __FUNCTION__);
+				dyn_fsync_was_active = true;
+			} else {
+				pr_info("%s: dynamic fsync enabled\n", __FUNCTION__);
+				dyn_fsync_active = true;
+			}
 		}
 		else if (data == 0) {
-			pr_info("%s: dyanamic fsync disabled\n", __FUNCTION__);
-			dyn_fsync_flush();
-			dyn_fsync_active = false;
+			if (dyn_fsync_force_off) {
+				pr_info("%s: dynamic fsync will be disabled\n", __FUNCTION__);
+				dyn_fsync_was_active = false;
+			} else {
+				pr_info("%s: dynamic fsync disabled\n", __FUNCTION__);
+				dyn_fsync_flush();
+				dyn_fsync_active = false;
+			}
 		}
 		else
 			pr_info("%s: bad value: %u\n", __FUNCTION__, data);
@@ -95,11 +103,27 @@ static ssize_t dyn_fsync_earlysuspend_show(struct kobject *kobj, struct kobj_att
 	return sprintf(buf, "early suspend active: %u\n", dyn_fsync_early_suspend);
 }
 
+static ssize_t dyn_fsync_locked_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%u\n", dyn_fsync_force_off ? 1 : 0);
+}
+
+static ssize_t dyn_fsync_future_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%u\n", dyn_fsync_was_active ? 1 : 0);
+}
+
 static struct kobj_attribute dyn_fsync_active_attribute = 
 	__ATTR(Dyn_fsync_active, 0666, dyn_fsync_active_show, dyn_fsync_active_store);
 
 static struct kobj_attribute dyn_fsync_version_attribute = 
 	__ATTR(Dyn_fsync_version, 0444 , dyn_fsync_version_show, NULL);
+
+static struct kobj_attribute dyn_fsync_locked_attribute =
+	__ATTR(dyn_fsync_locked, 0444 , dyn_fsync_locked_show, NULL);
+
+static struct kobj_attribute dyn_fsync_future_attribute =
+	__ATTR(dyn_fsync_future_state, 0444 , dyn_fsync_future_show, NULL);
 
 static struct kobj_attribute dyn_fsync_earlysuspend_attribute = 
 	__ATTR(Dyn_fsync_earlysuspend, 0444 , dyn_fsync_earlysuspend_show, NULL);
@@ -108,6 +132,8 @@ static struct attribute *dyn_fsync_active_attrs[] =
 	{
 		&dyn_fsync_active_attribute.attr,
 		&dyn_fsync_version_attribute.attr,
+		&dyn_fsync_locked_attribute.attr,
+		&dyn_fsync_future_attribute.attr,
 		&dyn_fsync_earlysuspend_attribute.attr,
 		NULL,
 	};
