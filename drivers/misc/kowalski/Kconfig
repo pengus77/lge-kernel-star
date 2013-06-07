@@ -47,13 +47,17 @@ config KOWALSKI_CPU_SUSPEND_FREQ_LIMIT
 	depends on TEGRA_CPU_DVFS && TEGRA_CORE_DVFS
 	default n
 
+config KOWALSKI_CPU_CONTROL
+	bool "Enable single/dual core dynamic mode via sysfs"
+	default y
+
 config KOWALSKI_AUTO_HOTPLUG
 	bool "CPU cores auto hotplug system"
 	depends on HOTPLUG_CPU
 	depends on ARCH_TEGRA
 	depends on !TEGRA_AUTO_HOTPLUG && !CPU_FREQ_GOV_PEGASUSQ && \
-	!CPU_FREQ_GOV_HOTPLUG
-	default y
+	!CPU_FREQ_GOV_HOTPLUG && KOWALSKI_CPU_CONTROL
+	default n
 
 config KOWALSKI_DYNAMIC_FSYNC
 	bool "Disable FSync when screen is on and flush buffers when it's off"
