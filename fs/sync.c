@@ -19,7 +19,7 @@
 #include "internal.h"
 
 #ifdef CONFIG_KOWALSKI_DYNAMIC_FSYNC
-extern bool dyn_fsync_early_suspend;
+extern bool dyn_fsync_can_sync;
 extern bool dyn_fsync_active;
 #endif
 
@@ -174,7 +174,7 @@ int vfs_fsync_range(struct file *file, loff_t start, loff_t end, int datasync)
 	int err, ret;
 
 #ifdef CONFIG_KOWALSKI_DYNAMIC_FSYNC
-	if (dyn_fsync_active && !dyn_fsync_early_suspend)
+	if (dyn_fsync_active && !dyn_fsync_can_sync)
 		return 0;
 #endif
 
@@ -231,7 +231,7 @@ static int do_fsync(unsigned int fd, int datasync)
 SYSCALL_DEFINE1(fsync, unsigned int, fd)
 {
 #ifdef CONFIG_KOWALSKI_DYNAMIC_FSYNC
-	if (dyn_fsync_active && !dyn_fsync_early_suspend)
+	if (dyn_fsync_active && !dyn_fsync_can_sync)
 		return 0;
 #endif
 
@@ -241,7 +241,7 @@ SYSCALL_DEFINE1(fsync, unsigned int, fd)
 SYSCALL_DEFINE1(fdatasync, unsigned int, fd)
 {
 #ifdef CONFIG_KOWALSKI_DYNAMIC_FSYNC
-	if (dyn_fsync_active && !dyn_fsync_early_suspend)
+	if (dyn_fsync_active && !dyn_fsync_can_sync)
 		return 0;
 #endif
 
@@ -259,7 +259,7 @@ SYSCALL_DEFINE1(fdatasync, unsigned int, fd)
 int generic_write_sync(struct file *file, loff_t pos, loff_t count)
 {
 #ifdef CONFIG_KOWALSKI_DYNAMIC_FSYNC
-	if (dyn_fsync_active && !dyn_fsync_early_suspend)
+	if (dyn_fsync_active && !dyn_fsync_can_sync)
 		return 0;
 #endif
 
@@ -328,7 +328,7 @@ SYSCALL_DEFINE(sync_file_range)(int fd, loff_t offset, loff_t nbytes,
 	umode_t i_mode;
 
 #ifdef CONFIG_KOWALSKI_DYNAMIC_FSYNC
-	if (dyn_fsync_active && !dyn_fsync_early_suspend)
+	if (dyn_fsync_active && !dyn_fsync_can_sync)
 		return 0;
 #endif
 
@@ -421,7 +421,7 @@ SYSCALL_DEFINE(sync_file_range2)(int fd, unsigned int flags,
 				 loff_t offset, loff_t nbytes)
 {
 #ifdef CONFIG_KOWALSKI_DYNAMIC_FSYNC
-	if (dyn_fsync_active && !dyn_fsync_early_suspend)
+	if (dyn_fsync_active && !dyn_fsync_can_sync)
 		return 0;
 #endif
 	return sys_sync_file_range(fd, offset, nbytes, flags);

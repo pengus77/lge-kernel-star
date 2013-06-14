@@ -627,7 +627,7 @@ extern bool dyn_fsync_force_off;
 extern bool dyn_fsync_active;
 extern bool dyn_fsync_was_active;
 
-extern void dyn_fsync_flush(void);
+extern void dyn_fsync_enabled(bool);
 #endif
 
 static int battery_get_property(struct power_supply *psy,
@@ -720,15 +720,14 @@ static int battery_get_property(struct power_supply *psy,
 				val->intval = batt_info->capacity;
 #ifdef CONFIG_KOWALSKI_DYNAMIC_FSYNC
 				if (dyn_fsync_active && batt_info->capacity <= 5) {
-					dyn_fsync_flush();
-					dyn_fsync_active = false;
+					dyn_fsync_enabled(false);
 					dyn_fsync_was_active = true;
 					dyn_fsync_force_off = true;
 					pr_info("%s: dynamic fsync disabled\n", __FUNCTION__);
 				} else if (dyn_fsync_force_off && batt_info->capacity > 5) {
 					dyn_fsync_force_off = false;
 					if (dyn_fsync_was_active) {
-						dyn_fsync_active = true;
+						dyn_fsync_enabled(true);
 						pr_info("%s: dynamic fsync enabled\n", __FUNCTION__);
 					}
 				}

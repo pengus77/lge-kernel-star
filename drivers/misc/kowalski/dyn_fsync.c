@@ -19,7 +19,6 @@
 #include <linux/kobject.h>
 #include <linux/sysfs.h>
 #include <linux/earlysuspend.h>
-#include <linux/mutex.h>
 #include <linux/reboot.h>
 #include <linux/writeback.h>
 #include <linux/workqueue.h>
@@ -28,35 +27,41 @@
 
 struct delayed_work fsync_suspend_work;
 
-/*
- * fsync_mutex protects dyn_fsync_active during early suspend / lat resume transitions
- */
-static DEFINE_MUTEX(fsync_mutex);
-
 bool dyn_fsync_force_off = false;
-bool dyn_fsync_early_suspend = false;
+bool dyn_fsync_can_sync = false;
 bool dyn_fsync_active = false;
 bool dyn_fsync_was_active = false;
 
-void dyn_fsync_flush(void)
+static void dyn_fsync_flush(bool force)
 {
-	mutex_lock(&fsync_mutex);
-	if (dyn_fsync_active) {
-		pr_info("%s: flushing all outstanding buffers\n", __FUNCTION__);
+	if (force)
+		dyn_fsync_can_sync = true;
 
-		dyn_fsync_early_suspend = true;
+	if (dyn_fsync_active && dyn_fsync_can_sync)
+	{
+		pr_info("%s: flushing all outstanding buffers\n", __FUNCTION__);
 		wakeup_flusher_threads(0);
 		sync_filesystems(0);
 		sync_filesystems(1);
 	}
-	mutex_unlock(&fsync_mutex);
 }
-EXPORT_SYMBOL(dyn_fsync_flush);
 
 static ssize_t dyn_fsync_active_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	return sprintf(buf, "%u\n", (dyn_fsync_active ? 1 : 0));
 }
+
+void dyn_fsync_enabled(bool enabled)
+{
+	if (enabled) {
+		dyn_fsync_can_sync = false;
+		dyn_fsync_active = true;
+	} else {
+		dyn_fsync_flush(true);
+		dyn_fsync_active = false;
+	}
+}
+EXPORT_SYMBOL(dyn_fsync_enabled);
 
 static ssize_t dyn_fsync_active_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
 {
@@ -72,7 +77,7 @@ static ssize_t dyn_fsync_active_store(struct kobject *kobj, struct kobj_attribut
 				dyn_fsync_was_active = true;
 			} else {
 				pr_info("%s: dynamic fsync enabled\n", __FUNCTION__);
-				dyn_fsync_active = true;
+				dyn_fsync_enabled(true);
 			}
 		}
 		else if (data == 0) {
@@ -81,8 +86,7 @@ static ssize_t dyn_fsync_active_store(struct kobject *kobj, struct kobj_attribut
 				dyn_fsync_was_active = false;
 			} else {
 				pr_info("%s: dynamic fsync disabled\n", __FUNCTION__);
-				dyn_fsync_flush();
-				dyn_fsync_active = false;
+				dyn_fsync_enabled(false);
 			}
 		}
 		else
@@ -91,16 +95,6 @@ static ssize_t dyn_fsync_active_store(struct kobject *kobj, struct kobj_attribut
 		pr_info("%s: unknown input!\n", __FUNCTION__);
 
 	return count;
-}
-
-static ssize_t dyn_fsync_version_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
-{
-	return sprintf(buf, "version: %u\n", DYN_FSYNC_VERSION);
-}
-
-static ssize_t dyn_fsync_earlysuspend_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
-{
-	return sprintf(buf, "early suspend active: %u\n", dyn_fsync_early_suspend);
 }
 
 static ssize_t dyn_fsync_locked_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
@@ -116,25 +110,17 @@ static ssize_t dyn_fsync_future_show(struct kobject *kobj, struct kobj_attribute
 static struct kobj_attribute dyn_fsync_active_attribute = 
 	__ATTR(Dyn_fsync_active, 0666, dyn_fsync_active_show, dyn_fsync_active_store);
 
-static struct kobj_attribute dyn_fsync_version_attribute = 
-	__ATTR(Dyn_fsync_version, 0444 , dyn_fsync_version_show, NULL);
-
 static struct kobj_attribute dyn_fsync_locked_attribute =
 	__ATTR(dyn_fsync_locked, 0444 , dyn_fsync_locked_show, NULL);
 
 static struct kobj_attribute dyn_fsync_future_attribute =
 	__ATTR(dyn_fsync_future_state, 0444 , dyn_fsync_future_show, NULL);
 
-static struct kobj_attribute dyn_fsync_earlysuspend_attribute = 
-	__ATTR(Dyn_fsync_earlysuspend, 0444 , dyn_fsync_earlysuspend_show, NULL);
-
 static struct attribute *dyn_fsync_active_attrs[] =
 	{
 		&dyn_fsync_active_attribute.attr,
-		&dyn_fsync_version_attribute.attr,
 		&dyn_fsync_locked_attribute.attr,
 		&dyn_fsync_future_attribute.attr,
-		&dyn_fsync_earlysuspend_attribute.attr,
 		NULL,
 	};
 
@@ -147,24 +133,24 @@ static struct kobject *dyn_fsync_kobj;
 
 static void fsync_suspend_work_fn(struct work_struct *work)
 {
-	dyn_fsync_flush();
+	dyn_fsync_flush(true);
 }
 
 static void dyn_fsync_suspend(struct early_suspend *h)
 {
-	schedule_delayed_work_on(0, &fsync_suspend_work, 3*HZ);
+	if (dyn_fsync_active)
+		schedule_delayed_work_on(0, &fsync_suspend_work, 3*HZ);
 }
 
 static void dyn_fsync_resume(struct early_suspend *h)
 {
-	mutex_lock(&fsync_mutex);
 	if (dyn_fsync_active) {
-		dyn_fsync_early_suspend = false;
+		cancel_delayed_work(&fsync_suspend_work);
+		dyn_fsync_can_sync = false;
 	}
-	mutex_unlock(&fsync_mutex);
 }
 
-static struct early_suspend dyn_fsync_early_suspend_handler = {
+static struct early_suspend dyn_fsync_can_sync_handler = {
 	.suspend = dyn_fsync_suspend,
 	.resume = dyn_fsync_resume,
 };
@@ -172,7 +158,9 @@ static struct early_suspend dyn_fsync_early_suspend_handler = {
 static int dyn_fsync_notify(struct notifier_block *nb,
                                 unsigned long event, void *data)
 {
-	dyn_fsync_flush();
+	if (dyn_fsync_active)
+		dyn_fsync_flush(true);
+
 	return NOTIFY_DONE;
 }
 
@@ -184,7 +172,7 @@ static int dyn_fsync_init(void)
 {
 	int sysfs_result;
 
-	register_early_suspend(&dyn_fsync_early_suspend_handler);
+	register_early_suspend(&dyn_fsync_can_sync_handler);
 	register_reboot_notifier(&dyn_fsync_reboot_handler);
 
 	dyn_fsync_kobj = kobject_create_and_add("dyn_fsync", kernel_kobj);
@@ -207,7 +195,7 @@ static int dyn_fsync_init(void)
 
 static void dyn_fsync_exit(void)
 {
-	unregister_early_suspend(&dyn_fsync_early_suspend_handler);
+	unregister_early_suspend(&dyn_fsync_can_sync_handler);
 	unregister_reboot_notifier(&dyn_fsync_reboot_handler);
 
 	if (dyn_fsync_kobj != NULL)
